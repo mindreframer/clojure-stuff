@@ -1,0 +1,88 @@
+<OBhtml>
+  <head>
+    <title>
+      <clj>
+	(let [title "ClojureHomePage - INFO - [Clojure %s]"
+              title (escape
+                     (format title (clojure-version)))]
+          (println title))
+      </clj>
+    </title>
+    <script>
+      <clj>
+       (println (slurp "resources/public/js/main.js"))
+      </clj>
+    </script>
+    <style>
+      <clj>
+      (println
+       (css [:body
+             {:background "#ABC"}])
+       (css [:b
+             {:font-size "30px"
+              :color "#EFF"}]))
+      </clj>
+    </style>
+  </head>
+  <body>
+    <div>
+      <b>Header info</b><br />
+      <clj>
+        (doseq [_ ($ headers)
+                :let [[k v] _]]
+          (println
+           (format "[%s] = %s<br />" k v)))
+      </clj>
+      <b>Clojure Version</b><br />
+      <clj>
+        (-> (clojure-version)
+            escape
+            (str "<br />")
+            println)
+      </clj><br />
+      <b>CHP Namespace</b><br />
+      <clj>
+        (-> *ns*
+            escape
+            (str "<br />")
+            println)
+      </clj><br />
+      <b>CHP Absolute Root Path</b><br />
+      <clj>
+        (-> root-path
+            clojure.java.io/file
+            .getAbsolutePath
+            escape
+            (println "<br /><br />"))
+      </clj>
+      <b>Public Symbols</b><br />
+      <clj>
+        (->> *ns*
+             ns-publics
+             keys
+             (map #(-> % str escape))
+             (interpose "<br />")
+             (apply str)
+             println)
+      </clj>
+      <br /><br />
+      <b>Detected CHTMLs</b><br />
+      <clj>
+        (doseq [_ (chtmls)
+                :let [chtml (escape _)]]
+          (println
+           (str chtml "<br />")))
+      </clj>
+      <br /><br />
+      <b>JVM</b><br />
+      <clj>
+        (let [properties (filter #(.contains % "java") 
+                                 (keys (System/getProperties)))]
+          (doseq [_ properties]
+            (println 
+             (format "[%s] = %s<br />"
+                     _ (env  _))))
+          (println "<br />"))
+      </clj>
+  </body>
+</html>
