@@ -1,0 +1,32 @@
+<clj>(declare ^:dynamic *words*)</clj>
+<html>
+<head>
+<title><clj>(println *title*)</clj></title>
+</head>
+<body>
+
+<p>
+Method: <clj>(println ($ method))</clj><br />
+Path: <clj>(println ($ uri))</clj><br />
+Params: <clj>(println ($ params))</clj><br />
+</p>
+
+
+<clj> 
+  (doseq [x [1 2 3]] (println  "CHP Line " x "<br />"))
+</clj>
+
+<clj> 
+(dotimes [_ 3]
+  (println
+   (str (text-field
+         (escape (str "field-" _))
+         (escape
+          (str "Field >" _)))
+        "<br />"))
+  (println
+   (str (check-box (escape _) true)
+        "<br />")))
+(binding [*words* "some words"] (println *words* "<br />"))
+</clj>
+</body>
