@@ -1,0 +1,11 @@
+target
+.build
+*~
+Gemfile*
+Guardfile
+bin
+.bundle
+*.html
+*.css
+browser-testing
+cascalog-samples
