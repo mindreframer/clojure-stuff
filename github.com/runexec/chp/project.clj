@@ -8,6 +8,7 @@
                  [korma "0.3.0-RC5"]
                  [lib-noir "0.6.4"]
                  [lobos "1.0.0-beta1"]
+                 [cheshire "5.2.0"]
                  [org.postgresql/postgresql "9.2-1003-jdbc4"]]
   :plugins [[lein-ring "0.8.3"]
             [lein-cljsbuild "0.3.1"]]
@@ -28,7 +29,8 @@
             ;; MOD
             "mod-list" ["run" "-m" "chp.module/mod-list"]
             "mod-enable" ["run" "-m" "chp.module/mod-enable"]
-            "mod-disable" ["run" "-m" "chp.module/mod-disable"]}
+            "mod-disable" ["run" "-m" "chp.module/mod-disable"]
+            "package-run" ["run" "-m" "chp.package/load-packages"]}
   :cljsbuild {:builds [{:source-paths ["resources/cljs"]
                         :compiler {:output-to "resources/public/js/main.js"
                                    :optimizations :advanced

@@ -20,11 +20,13 @@
        (filter #(.. % (endsWith ".clj")))
        (map #(str schema-dir %))))
 
-(defn- fp->schema 
+(defn fp->schema 
   "File path to schema"
   [schema-src-path]
-  (-> schema-src-path
-      slurp
+  (->> schema-src-path
+       slurp
+       (format "(use '[lobos.core :only [create]] '[chp.db :only [*db*]]) %s")
+       (format "(do %s)")
       read-string
       eval))
 
@@ -36,7 +38,7 @@
   (doseq [_ (schema-files)]
     (println "Creating Table => " _)
     (let [result (try
-                   (create *db* (fp->schema _))
+                   (fp->schema _)
                    true
                    (catch Exception e
                      (println e)
