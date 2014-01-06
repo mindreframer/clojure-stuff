@@ -1,0 +1,6 @@
+.lein-failures
+*~
+pom.xml
+pom.xml.asc
+target/**
+.*.swp
