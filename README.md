@@ -31,7 +31,7 @@ ClojureHomePage is a Clojure Web Framework that provides the following.
 * [Ring and port configuration](#ring-configuration)
 * [Auto-loading middleware](#auto-loading-middleware)
 
-<b> Code Generation & Modules </b>
+<b> Code Generation, Modules, and JSON API </b>
 
 * [Generating views from a table](#generating-table-views)
 * [View bindings](#builder-bindings)
@@ -42,6 +42,9 @@ ClojureHomePage is a Clojure Web Framework that provides the following.
 * [CSS Generation](#clojure-and-css-generation)
 * [JavaScript Generation](#clojure-and-javascript-generation)
 * [CHP Modules](#modules)
+* [Module Packages](#module-packages)
+* [JSON API](#json-api)
+* [Auto Documenting API](#json-api-documentation-page)
 
 <b> SQL Configuration, Migrations, and Manipulation </b>
 
@@ -54,6 +57,7 @@ ClojureHomePage is a Clojure Web Framework that provides the following.
 
 * [Install](#getting-started)
 * [UML Relationships](#uml)
+* [Namespace Dependencies](#namespace-dependencies)
 * [Unit Tests](/test/chp/test/)
 * [Removing example files](#removing-example-files)	
 * [License](#license)
@@ -170,13 +174,20 @@ time(s).
 ```
 
 Because CHP is based on Compojure, you can use Compojure and Ring extensions. These middleware extensions should be added to the chp-routing function of the chp.core namespace. Below is what the function currently looks like.
+
 ```clojure
 (defn chp-routing [& -chp-routes]
   ;;; (-> (apply routes ...) middleware-wrap xyz-wrap)
-  (-> (apply routes
-             (reduce into [] -chp-routes))
-      wrap-noir-flash
-      wrap-noir-session))
+  (let [auto-middleware (fn [x] 
+                             (let [wrapped (atom x)]
+                               (doseq [m (load-middleware)]
+                                 (swap! wrapped m))
+                               @wrapped))]
+    (-> (apply routes
+               (reduce into [] -chp-routes))
+        wrap-noir-flash
+        wrap-noir-session
+        auto-middleware)))
 ```
 
 Already included, but not loaded by default (except noir.session), the lib-noir library is a great helper library for Clojure web development.
@@ -195,7 +206,10 @@ The default configuration for CHP is located in project.clj
 :ring {:port 8000
        :auto-reload? true
        :auto-refresh? true
-       :reload-paths ["src/chp/"]
+       :reload-paths ["src/chp/"
+                      "chp-root/"
+                      "resources/middleware/"
+                      "resources/public/"]
        :handler chp.handler/app}
 ```
 
@@ -204,7 +218,7 @@ The default configuration for CHP is located in project.clj
 
 # Auto-loading Middleware
 
-Middleware is automatically loaded from '''resources/middleware/*.clj''' when the server starts. The middleware is evaluated in the chp.core namespace with the load-middleware fn.
+Middleware is automatically loaded from '''resources/middleware/*.clj''' when the server starts. The middleware is evaluated in the chp.core namespace with the load-middleware fn. All middleware is reloaded when triggering the ring-autoload.
 
 ```bash
 $ cat resources/middleware/example.clj
@@ -226,7 +240,7 @@ $ cat resources/middleware/example.clj
 
 A Korma SQL and Lobos compatible SQL connection configuration file is located at resources/config/db.clj
 
-The SQL database tables are located in resources/schema/. Each file represents a single table and these files get evaluated by the lein alias ```lein schema```.
+The SQL database tables are located in resources/schema/. These files can contain an unlimited amount of create calls and get evaluated by the lein alias ```lein schema```
 
 ```clojure
 $ lein schema
@@ -239,14 +253,19 @@ OKAY
 The Lobos library handles the table syntax. Below is the user table from user.clj.
 
 ```clojure
-(table :user
-       (integer :id :primary-key :auto-inc)
-       (varchar :name 20)
-       (varchar :password 100)
-       (unique [:name]))
+(create *db*
+        (table :user
+               (integer :id :primary-key :auto-inc)
+               (varchar :name 20)
+               (varchar :password 100)
+               (unique [:name])))
+(create *db*
+        (table :some_other_table
+               (integer :id :primary-key :auto-inc)
+               (varchar :name 20)
+               (varchar :password 100)
+               (unique [:name])))
 ```
-
-*Do not wrap your tables with the create macro.*
 
 1. [Lobos Project & Documentation](https://github.com/budu/lobos)
 2. [More Lobos Documentation](http://budu.github.io/lobos/documentation.html)
@@ -430,15 +449,6 @@ $ cat resources/bindings/user.clj
 
 The example user.clj bindings below will be used to make the new, list, view, and edit pages of the user table in schema/user.clj.
 
-Th below bindings will produce the following urls.
-
-```
-site.com/chp/list/user
-site.com/chp/new/user
-site.com/chp/view/user/1
-site.com/chp/edit/user/1
-```
-
 ```clojure
 ;; Example bindings for resources/schema/user.clj
 ;; All values will be retrieved by the id column
@@ -489,12 +499,13 @@ $ cd chp
 $ cat resources/schema/user.clj 
 ```
 ```clojure
-(table :user
-       (integer :id :primary-key :auto-inc)
-       (varchar :name 20)
-       (varchar :password 100)
-       (boolean :admin)
-       (unique [:name]))
+(create *db*
+        (table :user
+               (integer :id :primary-key :auto-inc)
+               (varchar :name 20)
+               (varchar :password 100)
+               (boolean :admin)
+               (unique [:name])))
 ```
 ```bash
 $ lein schema
@@ -502,6 +513,17 @@ Creating Table =>  resources/schema/example.clj
 OKAY
 Creating Table =>  resources/schema/user.clj
 OKAY
+$ lein gen user
+resources/generation-templates/routes/name.clj -> src/chp/routes/user.clj
+resources/generation-templates/chtml/new.chtml -> chp-root/user/new.chtml
+resources/generation-templates/chtml/edit.chtml -> chp-root/user/edit.chtml
+resources/generation-templates/chtml/view.chtml -> chp-root/user/view.chtml
+resources/generation-templates/chtml/list.chtml -> chp-root/user/list.chtml
+URL DATA BOUND TO => resources/bindings/user.clj 
+site.com/new/user 
+site.com/list/user 
+site.com/edit/user/:id 
+site.com/view/user/:id
 $ psql example
 psql (9.2.4)
 Type "help" for help.
@@ -520,7 +542,7 @@ $ telnet localhost 8000
 Trying ::1...
 Connected to localhost.
 Escape character is '^]'.
-GET /chp/list/user
+GET /list/user
 
 ```
 <h1>Viewing table of  user
@@ -528,9 +550,9 @@ GET /chp/list/user
 
 <div style="background:yellow;">
   <table><thead><tr><th>Action</th><th><b>id</b></th><th><b>name</b></th></tr></thead>
-<tr><td><a href="/chp/view/user/1">view</a> <a href="/chp/edit/user/1">edit</a></td><td>1</td><td>user1</td></tr>
+<tr><td><a href="/view/user/1">view</a> <a href="/edit/user/1">edit</a></td><td>1</td><td>user1</td></tr>
 </table>
-<br /><br /> <a href="/chp/list/user?offset=10">More</a>
+<br /><br /> <a href="/list/user?offset=10">More</a>
 
 </div>
 ```bash
@@ -542,7 +564,7 @@ $ telnet localhost 8000
 Trying ::1...
 Connected to localhost.
 Escape character is '^]'.
-GET /chp/view/user/1
+GET /view/user/1
 ```
 <h1>Viewing  1
 </h1>
@@ -560,11 +582,11 @@ $ telnet localhost 8000
 Trying ::1...
 Connected to localhost.
 Escape character is '^]'.
-GET /chp/edit/user/1
+GET /edit/user/1
 
 <h1> Editing user #1 </h1>
 
-<form action="/chp/edit/user/1
+<form action="/edit/user/1
 " method="POST">
 <label for=":admin">admin</label><br /><input checked="checked" id="admin" name="admin" type="checkbox" value="true" /><br /><br /><label for=":password">password</label><br /><input id="password" name="password" type="password" value="badcleartext" /><br /><br /><label for=":name">name</label><br /><input id="name" name="name" type="text" value="user1" /><br /><br /> <input type="submit" value="save" />
 
@@ -591,13 +613,14 @@ chp-examples/  chp-root/  resources/  src/  test/  tutorial/  project.clj  READM
 [user@machine chp]$ cat resources/schema/user.clj 
 ```
 ```clojure
-(table :user
-       (integer :id :primary-key :auto-inc)
-       (varchar :name 20)
-       (varchar :password 128)
-       (varchar :salt 128)
-       (boolean :admin)
-       (unique [:name]))
+(create *db*
+        (table :user
+               (integer :id :primary-key :auto-inc)
+               (varchar :name 20)
+               (varchar :password 128)
+               (varchar :salt 128)
+               (boolean :admin)
+               (unique [:name])))
 ```
 ```bash
 [user@machine chp]$ lein schema
@@ -706,21 +729,23 @@ Login Failed
 
 [user@machine config]$ cd ../schema/
 [user@machine schema]$ cat user.clj 
-(table :user
-       (integer :id :primary-key :auto-inc)
-       (varchar :name 20)
-       (varchar :password 128)
-       (varchar :salt 128)
-       (boolean :admin)
-       (unique [:name]))
+(create *db*
+        (table :user
+               (integer :id :primary-key :auto-inc)
+               (varchar :name 20)
+               (varchar :password 128)
+               (varchar :salt 128)
+               (boolean :admin)
+               (unique [:name])))
 [user@machine schema]$ emacs -nw news.clj 
 [user@machine schema]$ cat news.clj 
-(table :news
-       (integer :id :primary-key :auto-inc)
-       (integer :userid)
-       (varchar :title 100)
-       (text :body)
-       (unique [:title]))
+(create *db*
+        (table :news
+               (integer :id :primary-key :auto-inc)
+               (integer :userid)
+               (varchar :title 100)
+               (text :body)
+               (unique [:title])))
 [user@machine schema]$ lein schema
 Creating Table =>  resources/schema/user.clj
 OKAY
@@ -738,6 +763,38 @@ OKAY
         :body #(text-area :body (escape %))}
  :edit-enforce {:title #(->> % str seq (take 100) (apply str))
                 :body str}}
+
+##### Create Views 
+
+
+[user@machine bindings]$ lein gen news
+ Jul 14, 2013 9:59:55 AM com.mchange.v2.log.MLog <clinit>
+INFO: MLog clients using java 1.4+ standard logging.
+ resources/generation-templates/routes/name.clj -> src/chp/routes/news.clj
+resources/generation-templates/chtml/new.chtml -> chp-root/news/new.chtml
+resources/generation-templates/chtml/edit.chtml -> chp-root/news/edit.chtml
+resources/generation-templates/chtml/view.chtml -> chp-root/news/view.chtml
+resources/generation-templates/chtml/list.chtml -> chp-root/news/list.chtml
+URL DATA BOUND TO => resources/bindings/news.clj 
+site.com/new/news 
+site.com/list/news 
+site.com/edit/news/:id 
+site.com/view/news/:id
+
+##### Add Routes to chp/src/chp/handler.clj
+```
+```clojure
+(:require [chp.routes.news :refer [news-table-routes]])
+
+(def app
+  (chp-site news-table-routes
+            example-routes
+            user-table-routes
+            chp-builder-paths
+            app-routes))
+
+```
+```bash
 [user@machine bindings]$ lein ring server
 Jul 06, 2013 9:29:46 PM com.mchange.v2.log.MLog <clinit>
 INFO: MLog clients using java 1.4+ standard logging.
@@ -747,7 +804,7 @@ Started server on port 8000
 
 ##### Create new blog post
 
-[user@machine bindings]$ firefox http://localhost:8000/chp/new/news
+[user@machine bindings]$ firefox http://localhost:8000/new/news
 ```
 
 
@@ -852,14 +909,177 @@ Deleting resources/middleware/verbose-log.clj
 $ lein mod-list
 
 resources/modules
-resources/modules/migration
+resources/modules/migrations
+resources/modules/migrations/01-add-admin.clj
 resources/modules/cljs
 resources/modules/middleware
 resources/modules/middleware/example.clj
+resources/modules/middleware/operating-status.clj
+resources/modules/middleware/text-mime-only.clj
 resources/modules/middleware/verbose-log.clj
 resources/modules/schema
-resources/modules/binding
+resources/modules/schema/example.clj
+resources/modules/schema/user.clj
+resources/modules/schema/blog-post.clj
+resources/modules/bindings
+resources/modules/bindings/user.clj
 ```
+
+# Module Packages
+
+Module packages are stored in ```resources/packages/```. Each package is a clj file that describes what modules to install when calling ```lein package-run name1 name2 etc...```
+
+```bash
+$ cat resources/packages/admin.clj
+```
+```clojure
+;; CHP Admin module
+;; {:module-type [:module :module :module etc..]}
+
+{:schema [:user] ;; resources/modules/schema/user.clj
+ :migrations [:01-add-admin] ;; resources/modules/migrations/01-add-admin.clj
+ :bindings [:user] ;; resources/modules/bindings/user.clj
+ :middleware [] ;; resources/modules/middleware/ -- nothing
+ :cljs [] ;; resources/modules/cljs/ -- nothing
+ :api []} ;; resources/modules/api/ -- nothing
+```
+
+```bash
+$ lein package-run admin
+
+ Loading for :schema
+Copying resources/modules/schema/user.clj -> resources/schema/user.clj
+Creating Table =>  resources/schema/user.clj
+OKAY
+
+ Loading for :migrations
+Copying resources/modules/migrations/01-add-admin.clj -> resources/migrations/01-add-admin.clj
+Jul 09, 2013 7:52:37 PM com.mchange.v2.log.MLog <clinit>
+INFO: MLog clients using java 1.4+ standard logging.
+create-chp-admin
+
+ Loading for :bindings
+Copying resources/modules/bindings/user.clj -> resources/bindings/user.clj
+
+ Loading for :middleware
+
+ Loading for :cljs
+
+ Loading for :api
+```
+
+# JSON API
+
+To enable the JSON read-only API, create an API config file in resources/api/. Once this configuration file is made, you can access JSON values @ site.com/chp/api/{table-name}
+
+GET params can be used to locate specific values. If the params aren't listed in the configuration, the extra params are ignored.
+
+```bash
+$ cat resources/api/user.clj
+```
+```clojure
+
+;; API settings for the User table
+;; the filename must be the same as the table name
+;; {:table :user} => user.clj
+
+{:table :user
+ :return [:id :name]
+
+ ;; The where key holds a map that describes 
+ ;; columns that can be used to locate the 
+ ;; data.
+
+ ;; Each column key needs to have a function
+ ;; as the value that accepts one arg. This
+ ;; function needs to convert the arg to the
+ ;; proper data type.
+
+ ;; The single arg is a string from the uri
+
+ :where {:id #(Integer. %)
+         :name str
+         :admin #(Boolean. %)}}
+```
+```bash
+$ curl http://localhost:8000/chp/api/user; echo " << done"
+
+{"data": [{
+  "name" : "admin",
+  "id" : 1
+},{
+  "name" : "example",
+  "id" : 3
+}]} << done
+
+$ curl http://localhost:8000/chp/api/user?id=3; echo " << done"
+
+{"data": [{
+  "name" : "example",
+  "id" : 3
+}]} << done
+
+$ curl http://localhost:8000/chp/api/user?name=admin; echo " << done"
+
+{"data": [{
+  "name" : "admin",
+  "id" : 1
+}]} << done
+
+$ curl http://localhost:8000/chp/api/userasdasd; echo " << done"
+
+An error occured << done
+```
+
+# JSON API Documentation Page
+
+After creating an API config file in ```resources/api/```, you can view the dynamically generated API documentation at ```site.com/chp/api```.
+
+Before showing the documentation page, here's what the default user API config looks like.
+
+```bash
+$ cat resources/api/user.clj
+```
+```clojure
+
+;; API settings for the User table
+;; the filename must be the same as the table name
+;; {:table :user} => user.clj
+
+{:table :user
+ :return [:id :name]
+
+ ;; The where key holds a map that describes 
+ ;; columns that can be used to locate the 
+ ;; data.
+
+ ;; Each column key needs to have a function
+ ;; as the value that accepts one arg. This
+ ;; function needs to convert the arg to the
+ ;; proper data type.
+
+ ;; The single arg is a string from the uri
+
+ :where {:id #(Integer. %)
+         :name str
+         :admin #(Boolean. %)}}
+```
+
+And here's what the documentation looks like for all config files in ```resources/api/```
+
+```bash 
+$ curl localhost:8000/chp/api
+```
+
+<h1>Available API</h1>
+
+<h1 style="background:#FFFAAA"> user </h1> Data Link: <a href="/chp/api/user">user</a> <div style="background:#FFFCDD"> <table><tr><td style="padding:10px;"><h4>Data Returned</h4></td><td><h4>Optional Where Params</h4></td></tr><tr><td style="padding-left:15px;">id <br />
+name <br />
+</td><td>id <br />
+name <br />
+admin <br />
+</td></tr></table> </div>
+
 
 # Getting started
 
@@ -876,7 +1096,196 @@ lein ring server
 # UML
 
 Full image size at https://raw.github.com/runexec/chp/master/violet-uml-workings.png
+
+(2013-07-08 JST) NOTICE: This graph is not consistent with the latest update(s) and contains minor errors.
+
 ![uml diagram](violet-uml-workings.png)
+
+
+# Namespace Dependencies 
+
+(Generated by ntable) https://github.com/runexec/ntable
+
+<pre>
+<h3 style="background:#AFFFFF;">chp/src/chp/routes/example.clj</h3>
+<b>:use</b>
+
+chp.core
+compojure.core
+[chp.html :only [escape]]
+
+
+<h3 style="background:#AFFFFF;">chp/src/chp/routes/user.clj</h3>
+<b>:use</b>
+
+chp.core
+
+
+<h3 style="background:#AFFFFF;">chp/src/chp/routes/chp.clj</h3>
+<b>:use</b>
+
+chp.core
+[cheshire.core :only [generate-string]]
+[chp.api :only [api->where]]
+[chp.builder :only [binding-exist?]]
+
+
+<h3 style="background:#AFFFFF;">chp/src/chp/clean.clj</h3>
+<h3 style="background:#AFFFFF;">chp/src/chp/migration.clj</h3>
+<b>:refer-clojure</b>
+
+:exclude
+[complement alter drop bigint boolean char double float time]
+
+
+<b>:use</b>
+
+[chp.db :only [*db*]]
+(lobos core connectivity migration)
+
+
+<h3 style="background:#AFFFFF;">chp/src/chp/password.clj</h3>
+<h3 style="background:#AFFFFF;">chp/src/chp/handler.clj</h3>
+<b>:use</b>
+
+compojure.core
+chp.html
+chp.template
+[chp.core :exclude [korma-db]]
+[chp.api :only [api->where api-dir]]
+[chp.db :only [*db*]]
+[garden.core :only [css]]
+
+
+<b>:require</b>
+
+chp.server
+[compojure.route :as route]
+[korma.db :as kdb]
+[korma.core :as kc]
+[noir.session :as session]
+[chp.routes.chp :refer [chp-builder-paths]]
+[chp.routes.example :refer [example-routes]]
+[chp.routes.user :refer [user-table-routes]]
+
+
+<h3 style="background:#AFFFFF;">chp/src/chp/html.clj</h3>
+<b>:require</b>
+
+hiccup.core
+hiccup.util
+hiccup.form
+hiccup.element
+
+
+<h3 style="background:#AFFFFF;">chp/src/chp/server.clj</h3>
+<h3 style="background:#AFFFFF;">chp/src/chp/api.clj</h3>
+<b>:use</b>
+
+[chp.db :only [*db*]]
+
+
+<b>:require</b>
+
+[korma.db :as kdb]
+[korma.core :as kc]
+
+
+<h3 style="background:#AFFFFF;">chp/src/chp/package.clj</h3>
+<b>:refer-clojure</b>
+
+:exclude
+[bigint boolean char double float time]
+
+
+<b>:use</b>
+
+[chp.schema :only [load-schemas]]
+[chp.migration :only [chp-migrate]]
+[chp.module :only [mod-enable]]
+
+
+<h3 style="background:#AFFFFF;">chp/src/chp/template.clj</h3>
+<b>:use</b>
+
+chp.core
+
+
+<h3 style="background:#AFFFFF;">chp/src/chp/builder.clj</h3>
+<b>:use</b>
+
+[chp.db :only [*db*]]
+[chp.core :exclude [korma-db]]
+chp.html
+chp.password
+[chp.login :exclude [korma-db]]
+
+
+<b>:require</b>
+
+[korma.core :as kc]
+[korma.db :as kdb]
+[noir.session :as session]
+
+
+<h3 style="background:#AFFFFF;">chp/src/chp/login.clj</h3>
+<b>:require</b>
+
+[korma.db :as kdb]
+[korma.core :as kc]
+
+
+<b>:use</b>
+
+[chp.db :only [*db*]]
+[chp.password :only [password]]
+
+
+<h3 style="background:#AFFFFF;">chp/src/chp/core.clj</h3>
+<b>:use</b>
+
+compojure.core
+[noir.session :only [wrap-noir-flash wrap-noir-session]]
+[chp.db :only [*db*]]
+
+
+<b>:require</b>
+
+chp.server
+[compojure.handler :as handler]
+[clojure.string :as string]
+[korma.db :as kdb]
+[korma.core :as kc]
+
+
+<h3 style="background:#AFFFFF;">chp/src/chp/generator.clj</h3>
+<b>:use</b>
+
+[chp.core :only [root-path]]
+
+
+<h3 style="background:#AFFFFF;">chp/src/chp/module.clj</h3>
+<b>:require</b>
+
+[clojure.java.io :as io]
+
+
+<h3 style="background:#AFFFFF;">chp/src/chp/db.clj</h3>
+<h3 style="background:#AFFFFF;">chp/src/chp/schema.clj</h3>
+<b>:refer-clojure</b>
+
+:exclude
+[bigint boolean char double float time]
+
+
+<b>:use</b>
+
+[chp.db :only [*db*]]
+[lobos.core :only [create]]
+
+
+</pre>
+
 
 # How?
 
@@ -906,6 +1315,7 @@ chp-root/  resources/  src/  target/  test/  project.clj
 $ ls resources/
 bindings/  cljs/  config/  generation-templates/  migrations/  public/  schema/
 ```
+
 
 # License
 
