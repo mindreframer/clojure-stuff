@@ -1,1 +1,7 @@
 https://github.com/runexec/chp.git
+https://github.com/korma/Korma.git
+https://github.com/Prismatic/plumbing.git
+https://github.com/ztellman/aleph.git
+https://github.com/functional-koans/clojure-koans.git
+https://github.com/Prismatic/eng-practices.git
+https://github.com/clojure-cookbook/clojure-cookbook.git
