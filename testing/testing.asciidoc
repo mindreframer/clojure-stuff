@@ -1,0 +1,23 @@
+[[ch_testing]]
+== Testing
+
+include::introduction.asciidoc[]
+
+include::unit-testing/unit-testing.asciidoc[]
+
+include::unit-testing/midje.asciidoc[]
+
+include::generative-testing/generative.asciidoc[]
+
+include::simplecheck/simplecheck.asciidoc[]
+
+include::browser-testing/browser-testing.asciidoc[]
+
+include::tracing/tracing.asciidoc[]
+
+include::core-typed/avoid-null-pointer.asciidoc[]
+
+include::core-typed/verify-java-interop.asciidoc[]
+
+include::core-typed/hof-typed.asciidoc[]
+
