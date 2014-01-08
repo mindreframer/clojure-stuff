@@ -56,6 +56,10 @@
       Tasty SQL for Clojure.
        284 commits, last change: 2013-12-03 11:51:45, 643 stars, 117 forks
 
+    krisajenkins/yesql:
+      A Clojure library for using SQL.
+       92 commits, last change: 2014-01-07 07:55:57, 71 stars, 2 forks
+
     Prismatic/eng-practices:
 
        17 commits, last change: 2013-11-10 16:18:17, 155 stars, 3 forks
