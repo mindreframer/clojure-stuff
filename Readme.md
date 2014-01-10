@@ -13,6 +13,7 @@
   - [Clojure: All grown up - 2013.03]( http://wit.io/posts/clojure-all-grown-up)
   - http://www.paradiso.cc/why-use-clojure/
   - http://www.reddit.com/r/Clojure/
+  - [My First Six Months with Clojure - 2013.09](http://the-arm.com/programming/2013/09/01/my-first-six-months-with-clojure/)
 
 ## IDEs
   - [LightTable](http://docs.lighttable.com/tutorials/full/)
