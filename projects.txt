@@ -7,3 +7,4 @@ https://github.com/Prismatic/plumbing.git
 https://github.com/runexec/chp.git
 https://github.com/tailrecursion/hoplon.git
 https://github.com/ztellman/aleph.git
+https://github.com/swannodette/lt-cljs-tutorial.git
