@@ -1,3 +1,4 @@
+https://github.com/bbatsov/clojure-style-guide.git
 https://github.com/clojure-cookbook/clojure-cookbook.git
 https://github.com/functional-koans/clojure-koans.git
 https://github.com/korma/Korma.git
@@ -5,7 +6,6 @@ https://github.com/krisajenkins/yesql.git
 https://github.com/Prismatic/eng-practices.git
 https://github.com/Prismatic/plumbing.git
 https://github.com/runexec/chp.git
+https://github.com/swannodette/lt-cljs-tutorial.git
 https://github.com/tailrecursion/hoplon.git
 https://github.com/ztellman/aleph.git
-https://github.com/swannodette/lt-cljs-tutorial.git
-https://github.com/bbatsov/clojure-style-guide.git
