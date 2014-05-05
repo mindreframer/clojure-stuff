@@ -50,53 +50,53 @@
 
     bbatsov/clojure-style-guide:
       A community coding style guide for the Clojure programming language
-       148 commits, last change: 2013-12-03 22:31:45, 673 stars, 47 forks
+       151 commits, last change: , 798 stars, 60 forks
 
     clojure-cookbook/clojure-cookbook:
       This is the home of O'Reilly's Clojure Cookbook - http://clojure-cookbook.com
-       1,564 commits, last change: 2014-01-06 07:26:39, 493 stars, 134 forks
+       1,744 commits, last change: , 789 stars, 194 forks
 
     functional-koans/clojure-koans:
       A set of exercises for learning Clojure
-       245 commits, last change: 2013-11-18 10:44:34, 1,467 stars, 798 forks
+       266 commits, last change: , 1,618 stars, 907 forks
 
     juxt/bidi:
       Bidirectional URI routing
-       163 commits, last change: 2014-04-16 11:49:12, 92 stars, 7 forks
+       163 commits, last change: , 100 stars, 5 forks
 
     korma/Korma:
       Tasty SQL for Clojure.
-       284 commits, last change: 2013-12-03 11:51:45, 643 stars, 117 forks
+       335 commits, last change: , 730 stars, 140 forks
 
     krisajenkins/yesql:
       A Clojure library for using SQL.
-       92 commits, last change: 2014-01-07 07:55:57, 71 stars, 2 forks
+       140 commits, last change: , 230 stars, 7 forks
 
     Prismatic/eng-practices:
 
-       17 commits, last change: 2013-11-10 16:18:17, 155 stars, 3 forks
+       22 commits, last change: , 239 stars, 5 forks
 
     Prismatic/plumbing:
       Prismatic's Clojure utility belt
-       126 commits, last change: 2013-12-26 22:34:29, 705 stars, 47 forks
+       157 commits, last change: , 806 stars, 57 forks
 
     puppetlabs/trapperkeeper:
-
-       466 commits, last change: 2014-04-15 17:17:19, 277 stars, 18 forks
+      A services framework for Clojure / JVM applications.
+       505 commits, last change: , 325 stars, 20 forks
 
     runexec/chp:
       ClojureHomePage is a Compojure based web framework that allows you to write the backend and frontend with Clojure.
-       170 commits, last change: 2013-07-13 18:27:36, 141 stars, 3 forks
+       170 commits, last change: , 145 stars, 3 forks
 
     swannodette/lt-cljs-tutorial:
       A ClojureScript Programming Language Tutorial for Light Table Users
-       81 commits, last change: 2014-01-20 16:12:49, 310 stars, 32 forks
+       133 commits, last change: , 456 stars, 73 forks
 
     tailrecursion/hoplon:
       Hoplon web development tools and libraries.
-       317 commits, last change: 2013-12-31 13:24:15, 104 stars, 3 forks
+       349 commits, last change: , 338 stars, 15 forks
 
     ztellman/aleph:
       asynchronous communication for clojure
-       628 commits, last change: 2013-08-25 14:04:44, 966 stars, 64 forks
+       659 commits, last change: , 1,044 stars, 74 forks
 <!-- PROJECTS_LIST_END -->
