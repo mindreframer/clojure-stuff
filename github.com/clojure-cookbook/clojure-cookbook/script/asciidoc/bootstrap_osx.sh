@@ -37,8 +37,8 @@ JSON_STYLE_FILE="${SOURCE_HIGHLIGHT_DIR}/json.style"
 PLAIN_LANG_FILE="${SOURCE_HIGHLIGHT_DIR}/plain.lang"
 
 CLOJURE_LANG_SOURCE="https://gist.github.com/alandipert/265810/raw/8dec04317e02187b03e96bb1e0206e154e0ae5e2/clojure.lang"
-JSON_LANG_SOURCE="https://raw.github.com/freeformsystems/rlx/master/highlight/json.lang"
-JSON_STYLE_SOURCE="https://raw.github.com/freeformsystems/rlx/master/highlight/json.style"
+JSON_LANG_SOURCE="https://raw.github.com/freeformsystems/rlx/master/lib/highlight/json.lang"
+JSON_STYLE_SOURCE="https://raw.github.com/freeformsystems/rlx/master/lib/highlight/json.style"
 
 # uncomment the following to debug/start fresh
 # does not clean LANG_MAP_FILE
