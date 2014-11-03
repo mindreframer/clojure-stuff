@@ -1,3 +1,6 @@
+(ns koans.04-sets
+  (:require [koan-engine.core :refer :all]))
+
 (meditations
   "You can create a set by converting another collection"
   (= #{3} (set __))

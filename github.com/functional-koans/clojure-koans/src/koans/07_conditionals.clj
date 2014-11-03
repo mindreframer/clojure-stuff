@@ -1,3 +1,6 @@
+(ns koans.07-conditionals
+  (:require [koan-engine.core :refer :all]))
+
 (defn explain-defcon-level [exercise-term]
   (case exercise-term
         :fade-out          :you-and-what-army
@@ -33,9 +36,9 @@
                         :else __)))
 
   "Or your fate may be sealed"
-  (= __ (if-not (zero? __)
+  (= 'doom (if-not (zero? __)
           'doom
-          'doom))
+          'more-doom))
 
   "In case of emergency, sound the alarms"
   (= :sirens

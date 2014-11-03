@@ -1,3 +1,6 @@
+(ns koans.17-macros
+  (:require [koan-engine.core :refer :all]))
+
 (defmacro hello [x]
   (str "Hello, " x))
 

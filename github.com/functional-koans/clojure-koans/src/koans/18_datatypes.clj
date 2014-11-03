@@ -1,3 +1,6 @@
+(ns koans.18-datatypes
+  (:require [koan-engine.core :refer :all]))
+
 (defrecord Nobel [prize])
 (deftype Pulitzer [prize])
 
