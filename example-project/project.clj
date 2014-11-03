@@ -1,4 +1,4 @@
-(defproject com.taoensso.examples/sente "0.14.1"
+(defproject com.taoensso.examples/sente "1.2.0"
   :description "Sente, reference web-app example project"
   :url "https://github.com/ptaoussanis/sente"
   :license {:name "Eclipse Public License"
@@ -10,28 +10,36 @@
                 *assert* true}
 
   :dependencies
-  [[org.clojure/clojure       "1.6.0"]
+  [;; [org.clojure/clojure    "1.6.0"]
+   [org.clojure/clojure       "1.7.0-alpha2"] ; May use any v1.5.1+
    ;;
-   [org.clojure/clojurescript "0.0-2173"]
-   [org.clojure/core.async    "0.1.278.0-76b25b-alpha"]
+   [org.clojure/clojurescript "0.0-2356"]
+   [org.clojure/core.async    "0.1.346.0-17112a-alpha"]
    ;;
-   [com.taoensso/sente        "0.14.1"] ; <--- Sente
-   [com.taoensso/timbre       "3.2.1"]
+   [cider/cider-nrepl         "0.7.0"]  ; Optional, for use with Emacs
    ;;
-   [http-kit                  "2.1.18"] ; <--- http-kit (currently required)
+   [com.taoensso/sente        "1.2.0"] ; <--- Sente
+   [com.taoensso/timbre       "3.3.1"]
    ;;
-   [compojure                 "1.1.6"]  ; Or routing lib of your choice
-   [ring                      "1.2.1"]
+   [http-kit                  "2.1.19"] ; <--- http-kit (currently required)
+   ;;
+   [compojure                 "1.2.0"]  ; Or routing lib of your choice
+   [ring                      "1.3.1"]
+   ;; [ring-anti-forgery      "1.0.0"]
+   [ring/ring-defaults        "0.1.2"]  ; Incl. `ring-anti-forgery`, etc.
    [hiccup                    "1.0.5"]  ; Optional, just for HTML
-   [org.clojure/core.match    "0.2.1"]  ; Optional but quite handly
-   ;; [ring-anti-forgery      "0.3.0"]  ; Buggy
-   [com.taoensso.forks/ring-anti-forgery "0.3.1"]  ; Optional, for easy CSRF protection
-   ]
+   ;;
+   ;;; Transit deps optional; may be used to aid perf. of larger data payloads
+   ;;; (see reference example for details):
+   [com.cognitect/transit-clj  "0.8.259"]
+   [com.cognitect/transit-cljs "0.8.188"]]
 
   :plugins
-  [[lein-cljsbuild      "1.0.2"]
-   [com.keminglabs/cljx "0.3.2"] ; Must precede Austin!
-   [com.cemerick/austin "0.1.4"]]
+  [[lein-pprint         "1.1.2"]
+   [lein-ancient        "0.5.5"]
+   [com.cemerick/austin "0.1.4"]
+   [com.keminglabs/cljx "0.4.0"]
+   [lein-cljsbuild      "1.0.3"]]
 
   :hooks [cljx.hooks leiningen.cljsbuild]
   :cljx
@@ -51,4 +59,8 @@
   ;; connect to with Cider+emacs or your IDE of choice:
   :aliases
   {"build-once" ["do" "cljx" "once," "cljsbuild" "once"]
-   "start-dev" ["with-profile" "+dev" "repl" ":headless"]})
+   "start-dev"  ["repl" ":headless"]}
+
+  :repositories
+  [["sonatype" {:url "http://oss.sonatype.org/content/repositories/releases"
+                :snapshots false}]])
