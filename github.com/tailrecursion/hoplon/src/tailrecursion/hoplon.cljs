@@ -8,14 +8,14 @@
 
 (ns tailrecursion.hoplon
   (:require-macros
-    [tailrecursion.javelin :refer [with-let cell=]])
+   [tailrecursion.javelin :refer [with-let cell= prop-cell]]
+   [tailrecursion.hoplon  :refer [with-timeout]])
   (:require
-    [tailrecursion.javelin :refer [lift]] 
-    [goog.dom         :as gdom]
-    [cljs.reader      :refer [read-string]]
-    [clojure.string   :refer [split join blank?]]))
+   [tailrecursion.javelin :refer [cell? cell lift destroy-cell!]] 
+   [cljs.reader           :refer [read-string]]
+   [clojure.string        :refer [split join blank?]]))
 
-(declare do! on! $text)
+(declare do! on! $text add-children!)
 
 (def is-ie8 (not (aget js/window "Node")))
 
@@ -42,11 +42,6 @@
   ([coll index not-found]
    (try (nth coll index not-found) (catch js/Error _ not-found))))
 
-(defn pad-seq [n coll & [x]] 
-  (let [p (repeat n x)]
-    (let [z (- n (count coll))]
-      (if (pos? z) (concat coll (take z p)) coll))))
-
 (defn timeout
   ([f] (timeout f 0))
   ([f t] (.setTimeout js/window f t)))
@@ -57,37 +52,45 @@
   (mapcat #(if (or (seq?* %) (vector?* %)) (unsplice %) [%]) forms))
 
 (defn when-dom [this f]
-  (timeout
-    (fn doit []
-      (if (.contains (.-documentElement js/document) this) (f) (timeout doit 20)))))
+  (if-not (instance? js/Element this)
+    (f)
+    (timeout
+      (fn doit []
+        (if (.contains (.-documentElement js/document) this) (f) (timeout doit 20))))))
 
 (defn parse-args [[head & tail :as args]]
   (let [kw1? (comp keyword? first)
         mkkw #(->> (partition 2 %) (take-while kw1?) (map vec))
         drkw #(->> (partition 2 2 [] %) (drop-while kw1?) (mapcat identity))]
-    (cond (map?     head) [head tail]
-          (keyword? head) [(into {} (mkkw args)) (drkw args)]
-          :else           [{} args])))
+    (cond
+      (map?     head) [head (unsplice tail)]
+      (keyword? head) [(into {} (mkkw args)) (unsplice (drkw args))]
+      :else           [{} (unsplice args)])))
 
 (defn add-attributes! [this attr]
-  (let [prefix #(.substr % 0 3)
-        suffix #(keyword (.substr % 3))
+  (let [key*   #(let [n (let [s (name %2), c (last s)]
+                          (if-not (= \= c) s (.slice s 0 -1)))
+                      p (.substr n 0 3)] 
+                  (keyword (namespace %2) (if-not (= %1 p) n (.substr n 3))))
+        dokey  (partial key* "do-")
+        onkey  (partial key* "on-")
         dos    (atom {}) 
         ons    (atom {})
         addcls #(join " " (-> %1 (split #" ") set (into (split %2 #" "))))]
     (doseq [[k v] attr]
-      (let [k (name k), e (js/jQuery this)]
-        (cond (= k "class")         (doseq [cls (split v #" ")] (.addClass e cls))
-              (= k "css")           (.css e (clj->js v))
-              (= "do-" (prefix k))  (swap! dos assoc (suffix k) v)
-              (= "on-" (prefix k))  (swap! ons assoc (suffix k) v)
-              :else                 (cond (= false v) (.removeAttr e k)
-                                          (= true v)  (.attr e k k)
-                                          :else       (.attr e k (str v))))))
-    (when (seq @ons)
-      (timeout (fn [] (doseq [[k v] @ons] (on! this k v))))) 
+      (cond
+        (cell? v) (swap! dos assoc (dokey k) v)
+        (fn? v)   (swap! ons assoc (onkey k) v)
+        :else     (do! this (dokey k) v)))
     (when (seq @dos)
-      (timeout (fn [] (doseq [[k v] @dos] (do! this k @v) (add-watch v (gensym) #(do! this k %4))))))
+      (with-timeout 0
+        (doseq [[k v] @dos]
+          (do! this k @v)
+          (add-watch v (gensym) #(do! this k %4)))))
+    (when (seq @ons)
+      (with-timeout 0
+        (doseq [[k v] @ons]
+          (on! this k v)))) 
     this))
 
 (def append-child
@@ -95,10 +98,17 @@
     #(.appendChild %1 %2)
     #(try (.appendChild %1 %2) (catch js/Error _))))
 
-(defn add-children! [this kids]
-  (let [node #(cond (string? %) ($text %) (node? %) %)]
-    (doseq [x (keep node (unsplice kids))] (append-child this x))
-    this))
+(defn replace-children! [this new-children]
+  (.empty (js/jQuery this))
+  (add-children! this (if (sequential? new-children) new-children [new-children])))
+
+(defn add-children! [this [child-cell & _ :as kids]]
+  (if (cell? child-cell)
+    (do (replace-children! this @child-cell)
+        (add-watch child-cell (gensym) #(replace-children! this %4)))
+    (let [node #(cond (string? %) ($text %) (node? %) %)]
+      (doseq [x (keep node (unsplice kids))] (append-child this x))))
+  this)
 
 (defn on-append! [this f]
   (set! (.-hoplonIFn this) f))
@@ -107,18 +117,29 @@
   IPrintWithWriter
   (-pr-writer
     ([this writer opts]
-     (write-all writer "#<Element: " (.-tagName this) ">")))
+       (write-all writer "#<Element: " (.-tagName this) ">")))
   IFn
   (-invoke
     ([this & args]
-     (let [[attr kids] (parse-args args)]
-       (if (.-hoplonIFn this)
-         (doto this (.hoplonIFn attr kids))
-         (doto this (add-attributes! attr) (add-children! kids)))))))
+       (let [[attr kids] (parse-args args)]
+         (if (.-hoplonIFn this)
+           (doto this (.hoplonIFn attr kids))
+           (doto this (add-attributes! attr) (add-children! kids)))))))
+
+(defn- make-singleton-ctor [tag]
+  (fn [& args]
+    (let [old (aget (.getElementsByTagName js/document tag) 0)
+          new (.createElement js/document tag)]
+      (when old (.replaceChild (.-parentNode old) new old))
+      (apply new args))))
 
 (defn- make-elem-ctor [tag]
   (fn [& args]
     (apply (.createElement js/document tag) args)))
+
+(def html-body      (make-singleton-ctor "body"))
+(def html-head      (make-singleton-ctor "head"))
+(def html           (make-singleton-ctor "html"))
 
 (def a              (make-elem-ctor "a"))
 (def abbr           (make-elem-ctor "abbr"))
@@ -136,7 +157,6 @@
 (def bdo            (make-elem-ctor "bdo"))
 (def big            (make-elem-ctor "big"))
 (def blockquote     (make-elem-ctor "blockquote"))
-(def body           (make-elem-ctor "body"))
 (def br             (make-elem-ctor "br"))
 (def button         (make-elem-ctor "button"))
 (def canvas         (make-elem-ctor "canvas"))
@@ -174,11 +194,9 @@
 (def h4             (make-elem-ctor "h4"))
 (def h5             (make-elem-ctor "h5"))
 (def h6             (make-elem-ctor "h6"))
-(def head           (make-elem-ctor "head"))
 (def header         (make-elem-ctor "header"))
 (def hgroup         (make-elem-ctor "hgroup"))
 (def hr             (make-elem-ctor "hr"))
-(def html           (make-elem-ctor "html"))
 (def i              (make-elem-ctor "i"))
 (def iframe         (make-elem-ctor "iframe"))
 (def img            (make-elem-ctor "img"))
@@ -248,17 +266,17 @@
 (def $text          #(.createTextNode js/document %))
 (def $comment       #(.createComment js/document %))
 
-(def *initfns*    (atom []))
-(def add-initfn!  (partial swap! *initfns* conj))
+(def ^:private initialized? (atom false))
+(def ^:private *initfns*    (atom []))
 
-(defn init [html]
-  (timeout
-    (fn []
-      (let [body (js/jQuery "body")]
-        (.empty body)
-        (doseq [x html] (.append body x))
-        (-> body (.on "submit" (fn [e] (.preventDefault e))))
-        (doseq [f @*initfns*] (f))))))
+(defn add-initfn! [f]
+  (if @initialized? (js/setTimeout f 0) (swap! *initfns* conj f)))
+
+(defn init []
+  (with-timeout 0
+    (.on (js/jQuery "body") "submit" #(.preventDefault %))
+    (reset! initialized? true)
+    (doseq [f @*initfns*] (f))))
 
 ;; frp ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -284,13 +302,17 @@
 
 (defn text-val!
   ([e] (.val e))
-  ([e v] (-> e (.val (str v)) (.trigger "change"))))
+  ([e v] (.val e (str v))))
 
 (defn check-val!
   ([e] (.is e ":checked"))
-  ([e v] (-> e (.prop "checked" (boolean v)) (.trigger "change"))))
+  ([e v] (.prop e "checked" (boolean v))))
 
-(defmulti do! (fn [elem action & args] action))
+(defmulti do! (fn [elem key val] key) :default ::default)
+
+(defmethod do! ::default
+  [elem key val]
+  (do! elem :attr {key val}))
 
 (defmethod do! :value
   [elem _ & args] 
@@ -299,13 +321,21 @@
 
 (defmethod do! :attr
   [elem _ kvs]
-  (elem kvs))
+  (let [e (js/jQuery elem)]
+    (doseq [[k v] kvs]
+      (let [k (name k)]
+        (if (= false v)
+          (.removeAttr e k)
+          (.attr e k (if (= true v) k v)))))))
 
 (defmethod do! :class
   [elem _ kvs] 
-  (let [elem (js/jQuery elem)]
-    (doseq [[c p?] kvs]
-      (.toggleClass elem (name c) (boolean p?)))))
+  (let [elem  (js/jQuery elem)
+        ->map #(zipmap % (repeat true))
+        clmap (if (map? kvs)
+                kvs
+                (->map (if (string? kvs) (.split kvs #"\s+") (seq kvs))))]
+    (doseq [[c p?] clmap] (.toggleClass elem (name c) (boolean p?)))))
 
 (defmethod do! :css
   [elem _ kvs]
@@ -330,9 +360,8 @@
 
 (defmethod do! :focus
   [elem _ v]
-  (if v
-    (timeout (fn [] (.focus (js/jQuery elem))))
-    (timeout (fn [] (.focusout (js/jQuery elem))))))
+  (with-timeout 0
+    (if v (.focus (js/jQuery elem)) (.focusout (js/jQuery elem)))))
 
 (defmethod do! :select
   [elem _ _]
@@ -346,12 +375,68 @@
   [elem _ v]
   (.text (js/jQuery elem) (str v)))
 
+(defmethod do! :html
+  [elem _ v]
+  (.html (js/jQuery elem) v))
+
 (defmethod do! :scroll-to
   [elem _ v]
   (when v
-    (let [body (js/jQuery "body")
+    (let [body (js/jQuery "body,html")
           elem (js/jQuery elem)]
       (.animate body (clj->js {:scrollTop (.-top (.offset elem))})))))
 
-(defn on! [elem event callback]
+(defmulti on! (fn [elem event callback] event) :default ::default)
+
+(extend-type js/jQuery.Event
+  cljs.core/IDeref
+  (-deref [this] (-> this .-target js/jQuery .val)))
+
+(defmethod on! ::default
+  [elem event callback]
   (when-dom elem #(.on (js/jQuery elem) (name event) callback)))
+
+(defn loop-tpl*
+  [items reverse? tpl]
+  (let [pool-size  (cell  0)
+        items-seq  (cell= (seq items))
+        cur-count  (cell= (count items-seq))
+        show-ith?  #(cell= (< % cur-count))
+        ith-item   #(cell= (safe-nth items-seq %))]
+    (with-let [d (span)]
+      (when-dom d
+        #(let [p (.-parentNode d)]
+           (.removeChild p d)
+           (cell= (when (< pool-size cur-count)
+                    (doseq [i (range pool-size cur-count)]
+                      (let [e ((tpl (ith-item i)) :do-toggle (show-ith? i))]
+                        (if-not reverse?
+                          (.appendChild p e)
+                          (.insertBefore p e (.-firstChild p)))))
+                    (reset! ~(cell pool-size) cur-count))))))))
+
+(defn route-cell
+  "Manage the URL hash via Javelin cells. There are three arities:
+
+  - When called with no arguments this function returns a formula cell whose 
+    value is the URL hash or nil.
+
+  - When called with a single string argument, the argument is taken as the
+    default value, which is returned in place of nil when there is no hash.
+
+  - When a single cell argument is provided, the URL hash is kept synced to the
+    value of the cell.
+
+  - When a cell and a callback function are both provided, the URL hash is kept
+    synced to the value of the cell as above, and any attempt to change the hash
+    other than via the setter cell causes the callback to be called. The callback
+    should be a function of one argument, the requested URL hash."
+  ([]
+     (let [r (prop-cell (.. js/window -location -hash))]
+       (cell= (when (not= "" r) r))))
+  ([setter-or-dfl] 
+     (if (cell? setter-or-dfl)
+       (prop-cell (.. js/window -location -hash) setter-or-dfl)
+       (let [r (route-cell)] (cell= (or r setter-or-dfl)))))
+  ([setter callback]
+     (prop-cell (.. js/window -location -hash) setter callback)))

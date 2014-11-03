@@ -1,6 +1,6 @@
-<img src="img/Hoplite.jpg">
+[![Stories in Ready][12]][13] ![epicycles][11]
 
-# Hoplon
+# Hoplon [![latest version][8]][4]
 
 Hoplon is a set of tools and libraries for making web applications. Hoplon
 provides a compiler for web application frontend development, and includes
@@ -14,6 +14,16 @@ the following libraries as dependencies to complete the stack:
 * [Cljson][3]: an efficient method for transferring Clojure/ClojureScript
   data between client and server. Castra uses cljson as the underlying
   transport protocol.
+
+### Documentation
+
+* [http://hoplon.io][7]
+* [API Documentation][9]
+* [Design Document][6] (early version)
+
+### Demos
+
+* [Hoplon demo applications repository][5]
 
 ### Example
 
@@ -44,7 +54,7 @@ the following libraries as dependencies to complete the stack:
       <span>second thing</span>
     </my-list>
 
-    <!-- using FRP to link DOM and Javelin cells -->
+    <!-- using dataflow to link DOM and Javelin cells -->
     <p><text>You've clicked ~{clicks} times, so far.</text></p>
     <button on-click="{{ #(swap! clicks inc) }}">click me</button>
   </body>
@@ -77,21 +87,6 @@ Or, equivalently:
     (button :on-click #(swap! clicks inc) "click me")))
 ```
 
-### Documentation
-
-* [http://hoplon.io][7]
-* [Design Document][6] (early version)
-
-### Demos
-
-* [Hoplon demo applications repository][5]
-
-### Dependency
-
-Artifacts are published on [Clojars][4]. 
-
-![latest version][8]
-
 ## License
 
 ```
@@ -111,4 +106,9 @@ this license. You must not remove this notice, or any other, from this software.
 [5]: https://github.com/tailrecursion/hoplon-demos
 [6]: doc/Design.md
 [7]: http://hoplon.io/
-[8]: https://clojars.org/tailrecursion/hoplon/latest-version.svg
+[8]: https://clojars.org/tailrecursion/hoplon/latest-version.svg?bustcache=2
+[9]: http://tailrecursion.github.io/hoplon/
+[10]: http://en.wikipedia.org/wiki/Deferent_and_epicycle
+[11]: http://img.shields.io/badge/epicycles-0-green.svg?cache=1
+[12]: https://badge.waffle.io/tailrecursion/hoplon.png?label=ready&title=Ready
+[13]: https://waffle.io/tailrecursion/hoplon
