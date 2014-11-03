@@ -11,36 +11,15 @@
     [clojure.pprint                         :as pp]
     [clojure.java.io                        :as io]
     [clojure.string                         :as str]
-    [tailrecursion.hoplon                   :as hl]
     [tailrecursion.hoplon.compiler.tagsoup  :as tags]
+    [tailrecursion.hoplon.compiler.util     :as util]
     [tailrecursion.hoplon.compiler.refer    :as refer]))
 
 (def ^:dynamic *printer* prn)
 
-(def html-tags
-  '[a abbr acronym address applet area article
-    aside audio b base basefont bdi bdo big blockquote body br
-    button canvas caption center cite code col colgroup command
-    data datalist dd del details dfn dir div dl dt em embed
-    eventsource fieldset figcaption figure font footer form frame
-    frameset h1 h2 h3 h4 h5 h6 head header hgroup hr html i
-    iframe img input ins isindex kbd keygen label legend li link
-    html-map mark menu html-meta meter nav noframes noscript object
-    ol optgroup option output p param pre progress q rp rt ruby
-    s samp script section select small source span strike strong
-    style sub summary sup table tbody td textarea tfoot th thead
-    html-time title tr track tt u ul html-var video wbr $text
-    $comment spliced])
-
 (defn up-parents [path name]
   (let [[f & dirs] (str/split path #"/")]
     (->> [name] (concat (repeat (count dirs) "../")) (apply str))))
-
-(defn munge-path [path]
-  (-> (str "__" path)
-    (str/replace "_" "__")
-    (str/replace "/" "_")
-    (str/replace ":" "__COLON__")))
 
 (defn inline-code [s process]
   (let [lines (str/split s #"\n")
@@ -64,7 +43,7 @@
 (defn as-forms [s]
   (if (= \< (first (str/trim s))) 
     (tags/parse-string (inline-code s tags/html-escape))
-    (read-string (str "(" (inline-code s pr-str) ")"))))
+    (util/read-string (inline-code s pr-str))))
 
 (defn output-path     [forms] (-> forms first second str))
 (defn output-path-for [path]  (-> path slurp as-forms output-path))
@@ -93,50 +72,67 @@
 (defn compile-lib [[[ns* & _ :as nsdecl] & tlfs]]
   (when (= 'ns ns*) (forms-str (cons (make-nsdecl nsdecl) tlfs))))
 
-(defn compile-forms [forms js-file]
+(defn ns->path [ns]
+  (-> ns munge (str/replace \. \/) (str ".cljs")))
+
+(defn compile-forms [forms js-path css-inc-path]
   (require 'cljs.compiler)
   (let [[nsdecl & tlfs] forms
         cljs-munge (resolve 'cljs.compiler/munge)]
     (if (= 'ns (first nsdecl))
-      {:cljs (forms-str (cons (make-nsdecl nsdecl) tlfs))}
-      (let [[[_ & setup] html] ((juxt butlast last) forms)
-            outpath   (output-path forms)
-            js-uri    (up-parents outpath (.getName js-file))
-            mkns      #(symbol (str "tailrecursion.hoplon.app-pages." (gensym)))
-            nsdecl    (let [[h n & t] (make-nsdecl nsdecl)] (list* h (mkns) t))
-            nsname    (cljs-munge (second nsdecl)) 
-            [_ htmlattr [head body]]  (hl/parse-e html)
-            [_ headattr heads]        (hl/parse-e head)
-            [_ bodyattr bodies]       (hl/parse-e body)
-            heads     (map #(let [[t a c] (hl/parse-e %)] (list* t (or a {}) c)) heads)
-            s-nodep   (list 'script {:type "text/javascript"} "var CLOSURE_NO_DEPS = true;")
-            s-main    (list 'script {:type "text/javascript" :src js-uri})
-            s-init    (list 'script {:type "text/javascript"} (str nsname ".hoploninit();"))
-            s-html    (list 'html (or htmlattr {})
-                            (list* 'head (or headattr {}) heads)
-                            (list 'body (or bodyattr {}) s-nodep s-main s-init))
-            htmlstr   (tags/print-page "html" s-html)
-            cljs      (list nsdecl
-                            (list 'defn (symbol "^:export") 'hoploninit []
-                                  (cons 'do setup) 
-                                  (list
-                                    (symbol "tailrecursion.hoplon/init")
-                                    (mapv #(list 'flatten-expr %) bodies))))
-            cljsstr   (forms-str cljs)]
-        {:html htmlstr :cljs cljsstr :file outpath}))))
+      {:cljs (forms-str (cons (make-nsdecl nsdecl) tlfs)) :ns (second nsdecl)}
+      (let [[_ page & _] nsdecl
+            outpath    (output-path forms)
+            js-uri     (up-parents outpath js-path)
+            css-uri    (up-parents outpath css-inc-path)
+            page-ns    (util/munge-page page)
+            nsdecl     (let [[h n & t] (make-nsdecl nsdecl)]
+                         `(~h ~page-ns ~@t))
+            script     #(list 'script {:type "text/javascript"} (str %))
+            script-src #(list 'script {:type "text/javascript" :src (str %)})
+            s-html     `(~'html {}
+                          (~'head {}
+                            (~'meta {:charset "utf-8"})
+                            ~(script (str "window._hoplon_main_css = '" css-uri "';"))
+                            ~(script-src js-uri)
+                            ~(script (str (cljs-munge (second nsdecl)) ".hoploninit();")))
+                          (~'body {}))
+            htmlstr    (tags/print-page "html" s-html)
+            cljs       `(~nsdecl
+                          (defn ~(symbol "^:export") ~'hoploninit []
+                            ~@tlfs
+                            (~'tailrecursion.hoplon/init)))
+            cljsstr    (forms-str cljs)]
+        {:html htmlstr :cljs cljsstr :ns page-ns :file outpath}))))
 
 (defn pp [form] (pp/write form :dispatch pp/code-dispatch))
 
+(def cache (atom {}))
+
 (defn compile-string
-  [forms-str path js-file cljsdir htmldir & {:keys [opts]}]
-  (when-let [forms (as-forms forms-str)]
-    (binding [*printer* (if (:pretty-print opts) pp prn)]
-      (let [compiled (compile-forms forms js-file)
-            cljs-out (io/file cljsdir (str (munge-path path) ".cljs"))
-            html-out (when-let [f (:file compiled)] (io/file htmldir f))
-            write    #(when (and %1 %2) (spit (doto %1 io/make-parents) %2))]
-        (write cljs-out (:cljs compiled))
-        (write html-out (:html compiled))))))
+  [forms-str path js-path cljsdir htmldir & {:keys [opts]}]
+  (let [{cache? :cache :keys [pretty-print css-inc-path]} opts
+        cached      (get @cache path)
+        last-mod    (.lastModified (io/file path))
+        use-cached? (and (pos? last-mod)
+                      (<= last-mod (get cached :last-modified 0)))
+        write       (fn [f s m]
+                      (when (and f s)
+                        (spit (doto f io/make-parents) s)
+                        (when m (.setLastModified f m))))]
+    (let [{mod :last-modified :keys [file cljs html ns]}
+          (if use-cached?
+            cached
+            (when-let [forms (as-forms forms-str)]
+              (binding [*printer* (if pretty-print pp prn)]
+                (let [compiled (-> (compile-forms forms js-path css-inc-path)
+                                 (assoc :last-modified last-mod))]
+                  (if (= cache? false)
+                    compiled
+                    (get (swap! cache assoc path compiled) path))))))
+          cljs-out (io/file cljsdir (ns->path ns))]
+      (write cljs-out cljs mod)
+      (write (when file (io/file htmldir file)) html mod))))
 
 (defn compile-file [f & args]
   (apply compile-string (slurp f) (.getPath f) args))
