@@ -1,12 +1,22 @@
 (ns plumbing.fnk.fnk-examples-test
   "Explaining input and output schemata, fnk syntax, and their relationships
    by example."
-  (:use clojure.test plumbing.core)
+  #+cljs
+  (:require-macros
+   [cemerick.cljs.test :refer [is deftest testing]])
   (:require
    [schema.core :as s]
+   [plumbing.core :as p :include-macros true]
    [plumbing.fnk.schema :as schema]
-   [plumbing.fnk.pfnk :as pfnk]))
+   [plumbing.fnk.pfnk :as pfnk]
+   #+clj [clojure.test :refer :all]
+   #+cljs cemerick.cljs.test))
 
+#+cljs
+(do
+  (def Exception js/Error)
+  (def AssertionError js/Error)
+  (def Throwable js/Error))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Input and output schemata
@@ -44,7 +54,7 @@
 
 (deftest assert-satisfies-schema-test
   (is (thrown? Exception (schema/assert-satisfies-schema input-schema-1 output-schema-2)))
-  (is (do (schema/assert-satisfies-schema input-schema-1 output-schema-1) true)))
+  (is (nil? (schema/assert-satisfies-schema input-schema-1 output-schema-1))))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -101,7 +111,7 @@
 ;; schemata.  For more details and rationale for this syntax, see
 ;; plumbing.fnk/readme.md.
 
-(defnk a-simple-fnk
+(p/defnk a-simple-fnk
   "This fnk has required keys :a and :b, and an optional key :o
    that defaults to 10 -- equivalent to a-manual-keyword-function."
   [a b {o 10}]
@@ -116,7 +126,7 @@
     (test-simple-keyword-function a-simple-fnk)))
 
 
-(defnk a-simple-fnk2
+(p/defnk a-simple-fnk2
   "This fnk is like a-simple-fnk, but does not have a literal
    map body so nothing can be automatically inferred about its
    output schema"
@@ -124,15 +134,13 @@
   (hash-map :x (+ a b o)))
 
 (deftest a-simple-fnk2-test
-  ;; true is the trivial output schema, which puts no constraints
-  ;; on its output.
   (is (= s/Any
          (pfnk/output-schema a-simple-fnk2))))
 
 ;; For these cases, we can provide explicit metadata to hint the
 ;; output schema of the fnk.
 
-(defnk a-simple-fnk3 :- {:x s/Any}
+(p/defnk a-simple-fnk3 :- {:x s/Any}
   "This fnk is like a-simple-fnk2, but uses an explicit output
    schema hint, and is equivalent to a-simple-fnk"
   [a b {o 10}]
@@ -142,13 +150,32 @@
   (testing "fnk with explicit output schema"
     (test-simple-keyword-function a-simple-fnk3)))
 
+;; You can also provide schema information on the inputs, with
+;; validation like schema.core/defn.  See (doc fnk) for details.
+
+#+clj ;; This example uses clj-only annotations, but should otherwise work in cljs
+(p/defnk a-schematized-fnk :- (s/pred odd?)
+  [a :- long b :- int]
+  (+ a b))
+
+#+clj
+(deftest a-schematized-fnk-test
+  (is (= [{:a long :b int s/Keyword s/Any} (s/pred odd?)]
+         (pfnk/io-schemata a-schematized-fnk)))
+  (testing "No validation by default"
+    (is (= 2 (a-schematized-fnk {:a 1 :b 1}))))
+  (s/with-fn-validation
+    (is (= 3 (a-schematized-fnk {:a 1 :b (int 2)})))
+    (is (thrown? Exception (a-schematized-fnk {:a 1 :b 2})))
+    (is (thrown? Exception (a-schematized-fnk {:a 1 :b (int 1)})))))
+
 
 ;; fnks also have support for nested bindings, and nested maps
 ;; for input and output schemata.
 ;; A nested map binding is introduced by an inner vector, whose
 ;; first element is a keyword specifying the key to bind under.
 
-(defnk a-nested-fnk
+(p/defnk a-nested-fnk
   [a [:b b1 {b2 5}] c]
   {:sum (+ a b1 b2 c)
    :products {:as a
@@ -179,7 +206,7 @@
 ;; built-in destructuring.  :as binds a symbol to the entire map
 ;; input, and & binds to a map of any extra keys not destructured.
 
-(defnk a-fancier-nested-fnk
+(p/defnk a-fancier-nested-fnk
   [a [:b b1 :as b] :as m & more]
   [a b1 b m more])
 
@@ -192,3 +219,19 @@
 
   (is (= [1 2 {:b1 2 :b2 3} {:a 1 :b {:b1 2 :b2 3} :c 4} {:c 4}]
          (a-fancier-nested-fnk {:a 1 :b {:b1 2 :b2 3} :c 4}))))
+
+(p/defnk special-binding-fnk-with-schemas-1
+  [a :- s/Keyword :as m & r :- {s/Symbol s/Keyword}]
+  [a r m])
+
+(p/defnk special-binding-fnk-with-schemas-2
+  [a :- s/Keyword & r :- {s/Symbol s/Keyword} :as m]
+  [a r m])
+
+(deftest special-binding-fnk-with-schemas-test
+  (is (= {:a s/Keyword s/Symbol s/Keyword}
+         (pfnk/input-schema special-binding-fnk-with-schemas-1)
+         (pfnk/input-schema special-binding-fnk-with-schemas-2)))
+  (is (= [:foo {'bar :bar} {:a :foo 'bar :bar}]
+         (special-binding-fnk-with-schemas-1 {:a :foo 'bar :bar})
+         (special-binding-fnk-with-schemas-2 {:a :foo 'bar :bar}))))

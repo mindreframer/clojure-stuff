@@ -1,7 +1,10 @@
 (ns plumbing.map
   "Common operations on maps (both Clojure immutable and mutable Java stuff)"
   (:refer-clojure :exclude [flatten])
-  (:require [plumbing.core :as plumbing]))
+  (:require
+   [plumbing.core :as plumbing :include-macros true]
+   [plumbing.fnk.schema :as schema :include-macros true]
+   #+cljs [clojure.set :as set]))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -20,8 +23,8 @@
   ([m] m)
   ([m1 m2]
      (doseq [k (keys m1)]
-       (when (contains? m2 k) (throw (RuntimeException. (str "Duplicate key " k)))))
-     (into m2 m1))
+       (schema/assert-iae (not (contains? m2 k)) "Duplicate key %s" k))
+     (into (or m2 {}) m1))
   ([m1 m2 & maps]
      (reduce merge-disjoint m1 (cons m2 maps))))
 
@@ -95,66 +98,80 @@
    Empty maps produced by this pruning are themselves pruned from the output."
   ([f m] (keep-leaves-and-path (fn [_ l] (f l)) m)))
 
+(defmacro keyword-map
+  "Expands to a map whose keys are keywords with the same name as the given
+  symbols, e.g.:
 
+    (let [x 41, y (inc x)]
+      (keyword-map x y))
+
+    ;; => {:x 41, :y 42}"
+  [& syms]
+  (when-not (every? symbol? syms)
+    (throw (ex-info "Arguments to keyword-map must be symbols!" {:args syms})))
+  (zipmap (map #(keyword (name %)) syms) syms))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Java mutable Maps
 
-(defn update-key!
-  "Transform value in java.util.Map m under key k with fn f."
-  ([^java.util.Map m k f]
-     (.put m k (f (.get m k))))
-  ([^java.util.Map m k f & args]
-     (.put m k (apply f (.get m k) args))))
+#+clj
+(do
+  (defn update-key!
+    "Transform value in java.util.Map m under key k with fn f."
+    ([^java.util.Map m k f]
+       (.put m k (f (.get m k))))
+    ([^java.util.Map m k f & args]
+       (.put m k (apply f (.get m k) args))))
 
-(defmacro get!
-  "Get the value in java.util.Map m under key k.  If the key is not present,
+  (defmacro get!
+    "Get the value in java.util.Map m under key k.  If the key is not present,
    set the value to the result of default-expr and return it.  Useful for
    constructing mutable nested structures on the fly.
 
    (.add ^List (get! m :k (java.util.ArrayList.)) :foo)"
-  [m k default-expr]
-  `(let [^java.util.Map m# ~m k# ~k]
-     (or (.get m# k#)
-         (let [nv# ~default-expr]
-           (.put m# k# nv#)
-           nv#))))
+    [m k default-expr]
+    `(let [^java.util.Map m# ~m k# ~k]
+       (or (.get m# k#)
+           (let [nv# ~default-expr]
+             (.put m# k# nv#)
+             nv#))))
 
-(defn inc-key!
-  "Increment the value in java.util.Map m under key k by double d."
-  [^java.util.Map m k ^double d]
-  (.put m k (if-let [v (.get m k)]
-              (+ (double v) d)
-              d)))
+  (defn inc-key!
+    "Increment the value in java.util.Map m under key k by double d."
+    [^java.util.Map m k ^double d]
+    (.put m k (if-let [v (.get m k)]
+                (+ (double v) d)
+                d)))
 
-(defn inc-key-in!
-  "Increment the value in java.util.Map m under key-seq ks by double d,
+  (defn inc-key-in!
+    "Increment the value in java.util.Map m under key-seq ks by double d,
    creating and storing HashMaps under missing keys on the path to this leaf."
-  [^java.util.Map m ks ^double d]
-  (if-let [mk (next ks)]
-    (recur (get! m (first ks) (java.util.HashMap.)) mk d)
-    (inc-key! m (first ks) d)))
+    [^java.util.Map m ks ^double d]
+    (if-let [mk (next ks)]
+      (recur (get! m (first ks) (java.util.HashMap.)) mk d)
+      (inc-key! m (first ks) d)))
 
 
-(defn ^java.util.HashMap collate
-  "Take a seq of [k v] counts and sum them up into a HashMap on k."
-  [flat-counts]
-  (let [m (java.util.HashMap.)]
-    (doseq [[k v] flat-counts]
-      (inc-key! m k v))
-    m))
+  (defn ^java.util.HashMap collate
+    "Take a seq of [k v] counts and sum them up into a HashMap on k."
+    [flat-counts]
+    (let [m (java.util.HashMap.)]
+      (doseq [[k v] flat-counts]
+        (inc-key! m k v))
+      m))
 
-(defn ^java.util.HashMap deep-collate
-  "Take a seq of [kseq v] counts and sum them up into nested HashMaps"
-  [nested-counts]
-  (let [m (java.util.HashMap.)]
-    (doseq [[ks v] nested-counts]
-      (inc-key-in! m ks v))
-    m))
+  (defn ^java.util.HashMap deep-collate
+    "Take a seq of [kseq v] counts and sum them up into nested HashMaps"
+    [nested-counts]
+    (let [m (java.util.HashMap.)]
+      (doseq [[ks v] nested-counts]
+        (inc-key-in! m ks v))
+      m)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Ops on graphs represented as maps.
 
+#+clj
 (defn topological-sort
   "Take an adjacency list representation of a graph (a map from node names to
    sequences of child node names), and return a topological ordering of the node
@@ -183,3 +200,52 @@
         (when (.containsKey re r)
           (throw (IllegalArgumentException. (format "Graph contains a cycle containing %s and %s" c r)))))
       candidate)))
+
+#+cljs
+(defn topological-sort
+  [child-map & [include-leaves?]]
+  (let [child-map (if include-leaves?
+                    (reduce
+                     (fn [e k]
+                       (let [leaves (remove #(contains? e %)  (get e k))]
+                         (reduce (fn [e leaf] (assoc e leaf nil)) e leaves)))
+                     child-map
+                     (keys child-map))
+                    child-map)
+
+        dfs (fn [s g r pred]
+              (if (pred s)
+                (let [n          (peek s)
+                      neighbors  (vec (drop-while #(not (contains? g %)) (get g n)))]
+                  (if (seq neighbors)
+                    (recur (conj s (peek neighbors))
+                           (assoc g n (pop neighbors))
+                           r
+                           pred)
+                    (recur (pop s)
+                           (dissoc g n)
+                           (conj r n)
+                           pred)))
+                [s g r pred]))
+
+        first-duplicate (fn [coll]
+                          (loop [[f & r :as coll] coll
+                                 acc  #{}]
+                            (if (seq coll)
+                              (if (contains? acc f)
+                                [f] ;; We package the result to avoid confusion
+                                (recur r (conj acc f)))           ;; around nil
+                              nil)))
+
+        sorted (loop [[stack g r pred :as tuple] [[] child-map () seq]]
+                 (let [ks (keys g)]
+                   (if (seq ks)
+                     (recur (apply dfs (assoc tuple 0 [(first ks)])))
+                     r)))]
+
+    (if-let [cycle-start (first-duplicate sorted)]
+      (let [[cycle _ _ _] (dfs cycle-start child-map () #(and (seq %)
+                                                              (or (= (count %) 1)
+                                                                  (not= (first cycle-start) (peek %)))))]
+        (throw (ex-info (str "Graph contains a cycle.") {:cycle cycle})))
+      sorted)))
