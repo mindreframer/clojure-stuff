@@ -1,6 +1,6 @@
 (ns puppetlabs.trapperkeeper.core
   (:require [clojure.tools.logging :as log]
-            [slingshot.slingshot :refer [try+]]
+            [slingshot.slingshot :refer [try+ throw+]]
             [puppetlabs.kitchensink.core :refer [without-ns]]
             [puppetlabs.trapperkeeper.services :as services]
             [puppetlabs.trapperkeeper.app :as app]
@@ -38,7 +38,7 @@
           (map? config-data)]
    :post [(satisfies? app/TrapperkeeperApp %)]}
   (config/initialize-logging! config-data)
-  (internal/build-app* services config-data))
+  (internal/build-app* services config-data (promise)))
 
 (defn boot-services-with-cli-data
   "Given a list of ServiceDefinitions and a map containing parsed cli data, create
@@ -99,8 +99,7 @@
   Returns a TrapperkeeperApp instance.  Call `run-app` on it if you'd like to
   block the main thread to wait for a shutdown event."
   [cli-data]
-  {:pre  [(map? cli-data)
-          (contains? cli-data :config)]
+  {:pre  [(map? cli-data)]
    :post [(satisfies? app/TrapperkeeperApp %)]}
   ;; There is a strict order of operations that need to happen here:
   ;; 1. parse config files
@@ -161,7 +160,11 @@
         (internal/parse-cli-args!)
         (run))
     (catch map? m
-      (println (:message m))
       (case (without-ns (:type m))
-        :cli-error (System/exit 1)
-        :cli-help  (System/exit 0)))))
+        :cli-error ((println (:message m))
+                    (System/exit 1))
+        :cli-help ((println (:message m))
+                   (System/exit 0))
+        (throw+ m)))
+    (finally
+      (shutdown-agents))))

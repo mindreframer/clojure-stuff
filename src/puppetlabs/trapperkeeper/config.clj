@@ -20,7 +20,7 @@
   (:require [clojure.java.io :as io]
             [clojure.string :as str]
             [clojure.edn :as edn]
-            [fs.core :as fs]
+            [me.raynes.fs :as fs]
             [puppetlabs.kitchensink.core :as ks]
             [puppetlabs.config.typesafe :as typesafe]
             [puppetlabs.trapperkeeper.services :refer [service]]
@@ -52,7 +52,14 @@
     #{".edn"}
     (edn/read (PushbackReader. (io/reader file)))))
 
-(defn parse-config-path
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Public
+
+(defn load-config
+  "Given a path to a configuration file or directory of configuration files,
+  parse the config files and build up a trapperkeeper config map.  Can be used
+  to implement CLI tools that need access to trapperkeeper config data but
+  don't need to boot the full TK framework."
   [path]
   (when-not (.canRead (io/file path))
     (throw (FileNotFoundException.
@@ -72,9 +79,6 @@
                            (str "Duplicate configuration entry: " ks)))))
          (merge {}))))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; Public
-
 (defn config-service
   "Returns trapperkeeper's configuration service.  Expects
    to find a command-line argument value for `:config`; the value of this
@@ -87,13 +91,18 @@
            (get-in-config [this ks default] (get-in config ks default))))
 
 (defn parse-config-data
-  "Parses the .ini configuration file(s) and returns a map of configuration data."
+  "Parses the .ini, .edn, .conf, .json, or .properties configuration file(s)
+   and returns a map of configuration data. If no configuration file is
+   explicitly specified, will act as if it was given an empty configuration
+   file."
   [cli-data]
   {:post [(map? %)]}
   (let [debug? (or (:debug cli-data) false)]
-    (-> (:config cli-data)
-        (parse-config-path)
-        (assoc :debug debug?))))
+    (if-not (contains? cli-data :config)
+      {:debug debug?}
+      (-> (:config cli-data)
+         (load-config)
+         (assoc :debug debug?)))))
 
 (defn initialize-logging!
   "Initializes the logging system based on the configuration data."

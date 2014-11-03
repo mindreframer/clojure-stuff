@@ -1,3 +1,68 @@
+## 0.5.1
+
+This is a bugfix release.
+* Fix a bug that prevented `defservice` from working with protocols that were defined in a different namespace.
+
+## 0.5.0
+
+This is a feature release with a minor breaking API change.
+
+* The breaking API change affects the functions defined in the
+  `puppetlabs.trapperkeeper.services/Service` protocol - namely, `service-context`.
+  References to these functions are no longer automatically in scope inside a 
+  `service` or `defservice` definition as they were previously (via macro magic),
+  and they must be `require`d like any other function - 
+  `(require '[puppetlabs.trapperkeeper.services :refer [service-context]])`.
+* Changed schema version to support the Bool type
+* Improve implementation of the `service` macro
+* Formalize public function for loading config
+
+## 0.4.3
+
+This is a minor feature release.
+
+* Moved documentation to github wiki
+* Get rid of requirement for `--config` command-line argument
+* Add new `service-symbol` and `get-services` functions to protocols
+* Update dependencies
+
+## 0.4.2
+
+This is a minor feature release.
+
+* Add a new configuration setting `middlewares` to the nREPL service, to allow
+  registration of nREPL middleware (e.g. for compatibility with LightTable).
+  (Thanks to `exi` for this contribution!)
+
+## 0.4.1
+
+This is a maintenance/bugfix release.
+
+* Fix a minor bug in testutils/logging where we inadvertently changed the return value of
+  log statements.
+* Add an explicit call to `shutdown-agents` on trapperkeeper exit, to prevent the JVM from
+  hanging for 60 seconds on shutdown (if any services were using `future`).
+
+## 0.4.0
+
+This release includes improved error handling and logic for shutting down Trapperkeeper applications.
+
+* Improved handling of errors during a service's `init` or `start` functions:
+  * All services' `stop` functions are now called, even when an error is thrown by any service's 
+    `init` or `start` function.  This means that `stop` implementations must now be resilient
+    to invocation even when `init` or `start` has not executed.
+  * Updated `boot-services-with-cli-data`, `boot-services-with-config`, and `boot-with-cli-data`
+    to return the `TrapperkeeperApp` instance rather than propagating the `Throwable`.
+* Updated example "Reloaded" pattern usage to use the new `check-for-errors!` 
+  function on the `TrapperkeeperApp` instance to detect any errors that may have occurred 
+  while services were being bootstrapped.
+
+## 0.3.12
+
+This is a maintenance release.
+
+* Upgrade fs dependency to 1.4.5 to standardize across projects
+
 ## 0.3.11
 
 This is a maintenance/bugfix release.
