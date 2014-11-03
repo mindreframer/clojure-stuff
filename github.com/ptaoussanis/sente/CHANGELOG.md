@@ -1,3 +1,53 @@
+> This project uses [Break Versioning](https://github.com/ptaoussanis/encore/blob/master/BREAK-VERSIONING.md) as of **Aug 16, 2014**.
+
+## v1.2.0 / 2014 Oct 6
+
+This is a maintenance update that is **non-breaking UNLESS**:
+1. You are not using the default server-side chsk router.
+2. You are relying on (`?reply-fn <args>)` to log a warning rather than throw an NPE for nil `?reply-fn`s.
+
+ * **FIX**: Broken chsk router shutdown due to http://goo.gl/be8CGP.
+ * **BREAKING** [#77]: No longer substitute a dummy (logging) `?reply-fn` for non-callback events.
+
+
+## v1.1.0 / 2014 Sep 7
+
+ * **FIX**: https://github.com/ptaoussanis/timbre/issues/79 (unnecessary deps being pulled in).
+ * **NEW**: Added client-side `ajax-call` utility.
+ * **NEW**: Added keys to `event-msg`s: `:id` (event-id), `:?data` (event-?data).
+
+
+## v1.0.0 / 2014 Sep 2
+
+ > This is a MAJOR release with a bunch of improvements, most notably efficiency improvements. It is BREAKING if-and-only-if you read from the client-side :ch-recv channel directly.
+
+ * **NEW**: Added `chsk-destroy!` client-side API fn.
+ * **NEW** [#60]: Several transfer format efficiency improvements (faster, less bandwidth use).
+ * **NEW** [#12], [#59], [#66], [#67]: Added `:packer` option to client+server-side `make-channel-socket!` fns. This can be used to plug in an arbitrary de/serialization format. The default continues to be edn (which gives the best common-case performance and doesn't require any extra dependencies). An experimental Transit-based packer is included which allows manual + smart (automatic) per-payload format selection. See the updated reference example for details. Big thanks to @ckarlsen for getting the work started on this!
+ * **DEPRECATED**: `start-chsk-router-loop!`->`start-chsk-router!` (both client + server-side). There's a new event-handler format that's consistent between the client + server, and that makes componentizing Sente considerably easier. See the updated reference example for details. Big thanks to @hugoduncan for his work & input on this!
+ * **CHANGE**: Client-side router now traps+logs errors like the server-side router.
+ * **CHANGE**: General code improvements/refactoring, stuff I'd been meaning to do forever and wanted to get in before a v1 release.
+ * **CHANGE**: Further improvements to the reference example to make it play better with LightTable.
+ * **BREAKING**: the client-side `:ch-recv` channel now receives `event-msg` (maps) rather than `event` (vectors). `(:event <event-msg>)` will return the `event-msg`'s `event`.
+
+
+## v0.15.1 / 2014 July 21
+
+ > Hotfix focused on adjusting default options for Heroku users.
+
+ * **FIX** [#56]: Decrease default keep-alive values to work with [Heroku's http-routing timeouts](https://devcenter.heroku.com/articles/http-routing#timeouts).
+ * Minor reference example improvements.
+
+
+## v0.15.0 / 2014 July 11
+
+ > Minor, non-breaking update.
+
+ * **CHANGE**: Support for new (namespaced) [Ring Anti-Forgery](https://github.com/ring-clojure/ring-anti-forgery/commit/69082e6eac533a0c62c8418c78684030eeefbcec) session key (@DomKM).
+ * **CHANGE**: `[chsk/uidport-close]` event now triggers only 5 seconds after a WebSocket channel is closed (same as Ajax channels). Helps prevent unnecessary noise during window refresh, etc.
+ * **NEW** [#50]: Added a `:chsk-url-fn` option to client-side `make-channel-socket!` fn for full URL control.
+
+
 ## v0.14.1 / 2014 May 18
 
  > Minor, non-breaking update.
@@ -46,7 +96,7 @@ As always, feedback welcome on any changes here. Have fun, cheers! - Peter
 
 ## v0.10.1 / 2014 Apr 17
 
- * [#27] **FIX** broken :advanced mode compilation (@ostronom).
+ * [#27] **FIX** broken :advanced mode compilation (**@ostronom**).
 
 
 ## v0.10.0 / 2014 Apr 17

@@ -1,4 +1,4 @@
-(defproject com.taoensso/sente "0.14.1"
+(defproject com.taoensso/sente "1.2.0"
   :author "Peter Taoussanis <https://www.taoensso.com>"
   :description "Clojure channel sockets library"
   :url "https://github.com/ptaoussanis/sente"
@@ -9,64 +9,82 @@
   :min-lein-version "2.3.3"
   :global-vars {*warn-on-reflection* true
                 *assert* true}
-  :dependencies
-  [[org.clojure/clojure       "1.5.1"]
-   [org.clojure/clojurescript "0.0-2173"]
-   [org.clojure/core.async    "0.1.278.0-76b25b-alpha"]
-   [org.clojure/tools.reader  "0.8.3"]
-   [com.taoensso/encore       "1.6.0"]
-   [com.taoensso/timbre       "3.2.1"]
-   [http-kit                  "2.1.18"]]
 
-  :test-paths ["test" "src"]
+  :dependencies
+  [[org.clojure/clojure        "1.5.1"]
+   [org.clojure/clojurescript  "0.0-2356"]
+   [org.clojure/core.async     "0.1.346.0-17112a-alpha"]
+   [org.clojure/tools.reader   "0.8.9"]
+   [com.taoensso/encore        "1.11.2"]
+   [com.taoensso/timbre        "3.3.1"]
+   [http-kit                   "2.1.19"]]
+
+  ;; :plugins
+  ;; [[com.keminglabs/cljx "0.4.0"]
+  ;;  [lein-cljsbuild      "1.0.3"]]
+
   :profiles
   {;; :default [:base :system :user :provided :dev]
+   :server-jvm {:jvm-opts ^:replace ["-server"]}
    :1.6  {:dependencies [[org.clojure/clojure     "1.6.0"]]}
-   :test {:dependencies [[expectations            "1.4.56"]
-                         [reiddraper/simple-check "0.5.6"]]
+   :1.7  {:dependencies [[org.clojure/clojure     "1.7.0-alpha2"]]}
+   :test {:dependencies [[com.cognitect/transit-clj  "0.8.259"]
+                         [com.cognitect/transit-cljs "0.8.188"]
+                         [expectations               "2.0.12"]
+                         [org.clojure/test.check     "0.5.9"]
+                         ;; [com.cemerick/double-check "0.5.7"]
+                         ]
           :plugins [[lein-expectations "0.0.8"]
-                    [lein-autoexpect   "1.2.2"]]}
-   :dev* [:dev {:jvm-opts ^:replace ["-server"]
-                :hooks [cljx.hooks leiningen.cljsbuild]}]
+                    [lein-autoexpect   "1.3.0"]]}
+
    :dev
-   [:1.6 :test
+   [:1.7 :test
     {:plugins
-     [[lein-ancient                    "0.5.4"]
-      [com.keminglabs/cljx             "0.3.2"] ; Must precede Austin!
+     [;; These must be in :dev, Ref. https://github.com/lynaghk/cljx/issues/47:
+      [com.keminglabs/cljx             "0.4.0"]
+      [lein-cljsbuild                  "1.0.3"]
+      ;;
+      [lein-pprint                     "1.1.1"]
+      [lein-ancient                    "0.5.5"]
       [com.cemerick/austin             "0.1.4"]
-      [lein-cljsbuild                  "1.0.2"]
-      [com.cemerick/clojurescript.test "0.2.2"]
-      [codox                           "0.6.7"]]
+      [lein-expectations               "0.0.8"]
+      [lein-autoexpect                 "1.2.2"]
+      [com.cemerick/clojurescript.test "0.3.1"]
+      [codox                           "0.8.10"]]}]}
 
-     :cljx
-     {:builds
-      [{:source-paths ["src" "test"] :rules :clj  :output-path "target/classes"}
-       {:source-paths ["src" "test"] :rules :cljs :output-path "target/classes"}]}
+  :cljx
+  {:builds
+   [{:source-paths ["src" "test"] :rules :clj  :output-path "target/classes"}
+    {:source-paths ["src" "test"] :rules :cljs :output-path "target/classes"}]}
 
-     :cljsbuild
-     {:test-commands {"node"    ["node" :node-runner "target/main.js"]
-                      "phantom" ["phantomjs" :runner "target/main.js"]}
-      :builds ; Compiled in parallel
-      [{:id :main
-        :source-paths ["src" "test" "target/classes"]
-        :compiler     {:output-to "target/main.js"
-                       :optimizations :advanced
-                       :pretty-print false}}]}}]}
+  :cljsbuild
+  {:test-commands {"node"    ["node" :node-runner "target/main.js"]
+                   "phantom" ["phantomjs" :runner "target/main.js"]}
+   :builds
+   [{:id :main
+     :source-paths ["src" "test" "target/classes"]
+     :compiler     {:output-to "target/main.js"
+                    :optimizations :advanced
+                    :pretty-print false}}]}
 
-  :codox {:sources ["target/classes"]} ; For use with cljx
+  :test-paths ["test" "src"]
+  ;;:hooks      [cljx.hooks leiningen.cljsbuild]
+  ;;:prep-tasks [["cljx" "once"] "javac" "compile"]
+  :prep-tasks   [["with-profile" "+dev" ; Workaround for :dev cljx
+                  "cljx" "once"] "javac" "compile"]
+  :codox {:language :clojure ; [:clojure :clojurescript] ; No support?
+          :sources  ["target/classes"]
+          :src-linenum-anchor-prefix "L"
+          :src-dir-uri "http://github.com/ptaoussanis/encore/blob/master/src/"
+          :src-uri-mapping {#"target/classes"
+                            #(.replaceFirst (str %) "(.cljs$|.clj$)" ".cljx")}}
+
   :aliases
-  {"test-all"   ["with-profile" "default:+1.6" "expectations"]
+  {"test-all"   ["with-profile" "default:+1.6:+1.7" "expectations"]
    "test-auto"  ["with-profile" "+test" "autoexpect"]
    "build-once" ["do" "cljx" "once," "cljsbuild" "once"]
    "deploy-lib" ["do" "build-once," "deploy" "clojars," "install"]
-   "start-dev"  ["with-profile" "+dev*" "repl" ":headless"]}
+   "start-dev"  ["with-profile" "+server-jvm" "repl" ":headless"]}
 
-  :repositories
-  {"sonatype"
-   {:url "http://oss.sonatype.org/content/repositories/releases"
-    :snapshots false
-    :releases {:checksum :fail}}
-   "sonatype-snapshots"
-   {:url "http://oss.sonatype.org/content/repositories/snapshots"
-    :snapshots true
-    :releases {:checksum :fail :update :always}}})
+  :repositories {"sonatype-oss-public"
+                 "https://oss.sonatype.org/content/groups/public/"})

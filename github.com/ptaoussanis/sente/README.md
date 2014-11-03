@@ -1,7 +1,7 @@
-**[API docs][]** | **[CHANGELOG][]** | [other Clojure libs][] | [Twitter][] | [contact/contributing](#contact--contributing) | current ([semantic][]) version:
+**[API docs][]** | **[CHANGELOG][]** | [other Clojure libs][] | [Twitter][] | [contact/contrib](#contact--contributing) | current [Break Version][]:
 
 ```clojure
-[com.taoensso/sente "0.14.1"] ; Stable
+[com.taoensso/sente "1.2.0"] ; Please see CHANGELOG for details
 ```
 
 # Sente, channel sockets for Clojure
@@ -21,16 +21,16 @@ Or: **Clojure(Script) + core.async + WebSockets/Ajax = _The Shiz_**
 ## What's in the box™?
   * **Bidirectional a/sync comms** over both **WebSockets** and **Ajax** (auto-fallback).
   * **Robust**: auto keep-alives, buffering, protocol selection, reconnects. **It just works™**.
-  * Efficient design incl. transparent event batching for **low-bandwidth use, even over Ajax**.
-  * Full, **transparent support for [edn][]** over the wire (JSON, XML, and other arbitrary string-encoded formats may be used as edn strings).
+  * Highly efficient design incl. transparent event batching for **low-bandwidth use, even over Ajax**.
+  * Send arbitrary Clojure vals over [edn][] or [Transit](https://github.com/cognitect/transit-cljs) (JSON, MessagePack, etc.).
   * **Tiny, simple API**: `make-channel-socket!` and you're good to go.
   * Automatic, sensible support for users connected with **multiple clients** and/or devices simultaneously.
   * Realtime info on **which users are connected** over which protocols (v0.10.0+).
   * **Flexible model**: use it anywhere you'd use WebSockets/Ajax/Socket.IO, etc.
   * Standard **Ring security model**: auth as you like, HTTPS when available, CSRF support, etc.
   * **Fully documented, with examples**.
-  * Small: **<900 lines of code** for the entire client+server implementation.
-  * **Supported servers**: currently only [http-kit][] but [PRs welcome](https://github.com/ptaoussanis/sente/issues/2) to add support for additional servers!
+  * **Small codebase**: ~1k lines for the entire client+server implementation.
+  * **Supported servers**: currently only [http-kit][] but a pluggable interface is planned.
 
 
 ### Capabilities
@@ -50,7 +50,7 @@ So you can ignore the underlying protocol and deal directly with Sente's unified
 Add the necessary dependency to your [Leiningen][] `project.clj`. This'll provide your project with both the client (ClojureScript) + server (Clojure) side library code:
 
 ```clojure
-[com.taoensso/sente "0.14.1"]
+[com.taoensso/sente "1.2.0"]
 ```
 
 ### On the server (Clojure) side
@@ -105,13 +105,11 @@ You'll setup something similar on the client side:
 ```clojure
 (ns my-client-side-ns ; .cljs
   (:require-macros
-   [cljs.core.match.macros :refer (match)] ; Optional, useful
    [cljs.core.async.macros :as asyncm :refer (go go-loop)])
   (:require
    ;; <other stuff>
-   [cljs.core.match] ; Optional, useful
    [cljs.core.async :as async :refer (<! >! put! chan)]
-   [taoensso.sente :as sente :refer (cb-success?)] ; <--- Add this
+   [taoensso.sente  :as sente :refer (cb-success?)] ; <--- Add this
   ))
 
 ;;; Add this: --->
@@ -132,7 +130,7 @@ You're good to go! The client will automatically initiate a WebSocket or repeati
 
 #### Client-side API
 
-  * `ch-recv` is a **core.async channel** that'll receive `event`s.
+  * `ch-recv` is a **core.async channel** that'll receive `event-msg`s.
   * `chsk-send!` is a `(fn [event & [?timeout-ms ?cb-fn]])`. This is for standard **client>server req>resp calls**.
 
 #### Server-side API
@@ -145,17 +143,18 @@ You're good to go! The client will automatically initiate a WebSocket or repeati
 Term          | Form                                                                  |
 ------------- | --------------------------------------------------------------------- |
 **event**     | `[<ev-id> <?ev-data>]`, e.g. `[:my-app/some-req {:data "data"}]`      |
-**event-msg** | `{:ring-req _ :event _ :?reply-fn _}`                                 |
+**event-msg** (server) | `{:event _ :send-fn _ :?reply-fn _ :ring-req _ <...>}`       |
+**event-msg** (client) | `{:event _ :send-fn _ <...>}`                                |
 `<ev-id>`     | A _namespaced_ keyword like `:my-app/some-req`                        |
 `<?ev-data>`  | An optional _arbitrary edn value_ like `{:data "data"}`               |
 `:ring-req`   | Ring map for Ajax request or WebSocket's initial handshake request    |
-`:?reply-fn`  | Present only when client requested a reply (otherwise logs a warning) |
+`:?reply-fn`  | Present only when client requested a reply.                           |
 
 #### Summary
 
   * So clients can use `chsk-send!` to send `event`s to the server. They can optionally request a reply, with timeout.
   * The server can likewise use `chsk-send!` to send `event`s to _all_ the clients (browser tabs, devices, etc.) of a particular connected user by his/her `user-id`.
-  * The server can also use an `event-msg`'s `?reply-fn` to _reply_ to a client `event` using an _arbitrary edn value_.
+  * The server can also use an `event-msg`'s `?reply-fn` to _reply_ to a particular client `event` using an _arbitrary edn value_.
 
 > It's worth noting that the server>user push `(chsk-send! <user-id> <event>)` takes a mandatory **user-id** argument. See the FAQ later for more info.
 
@@ -184,7 +183,7 @@ Term          | Form                                                            
 Some important differences to note:
 
   * The Ajax request is slow to initialize, and bulky (HTTP overhead).
-  * The Sente request is pre-initialized (usu. WebSocket), and lean (edn protocol).
+  * The Sente request is pre-initialized (usu. WebSocket), and lean (edn/Transit protocol).
 
 ### Ajax/Sente comparison: server>user push
 
@@ -221,17 +220,11 @@ Sure! I use it with Reagent myself. Sente's just a client<->server comms mechani
 
 #### What if I need to use JSON, XML, raw strings, etc.?
 
-Sente uses edn as an _implementation detail_ of its transfer format. Anything sent with Sente will arrive at the other end as _Clojure data_.
-
-Send a map, get a map. Send a vector, get a vector. Send a string, get a string.
-
-And since JSON, XML, etc. are all string-encoded formats, using them with Sente is trivial: just **send the encoded data as a string**, and remember to decode it on the other end however you like.
-
-Relative to network transfer times, the cost of (for example) `json->edn->json->data` vs `json->data` is negligable. It's also worth noting that the additional encoding isn't actually going to waste, it's buying you features implemented transparently by Sente like protocol negotiation and event batching. These can often outweigh any additional encoding cost.
+As of v1, Sente uses an extensible client<->server serialization mechanism. It uses edn by default since this usu. gives good performance and doesn't require any external dependencies. The [reference example project][] shows how you can plug in an alternative de/serializer. In particular, note that Sente ships with a Transit de/serializer that allows manual or smart (automatic) per-payload format selection.
 
 #### How do I route client/server events?
 
-However you like! If you don't have many events, a simple `cond` will probably do. I use [core.match][] myself since it's a nice fit and works well with both Clojure and ClojureScript. The [reference example project][] has a fully-baked example.
+However you like! If you don't have many events, a simple `cond` will probably do. Otherwise a multimethod dispatching against event ids works well (this is the approach taken in the [reference example project][].
 
 #### Security: is there HTTPS support?
 
@@ -243,7 +236,7 @@ Yup, it's automatic for both Ajax and WebSockets. If the page serving your JavaS
 
 The [reference example project][] has a fully-baked example.
 
-#### Pageload: How do I know when my channels are ready client-side?
+#### Pageload: How do I know when Sente is ready client-side?
 
 You'll want to listen on the receive channel for a `[:chsk/state {:first-open? true}]` event. That's the signal that the socket's been established.
 
@@ -252,6 +245,47 @@ You'll want to listen on the receive channel for a `[:chsk/state {:first-open? t
 There's a full [reference example project][] in the repo. Call `lein start-dev` in that dir to get a (headless) development repl that you can connect to with [Cider][] (emacs) or your IDE.
 
 Further instructions are provided in the relevant namespace.
+
+#### How can server-side channel socket events modify a user's session?
+
+> **Update**: [@danielsz](https://github.com/danielsz) has kindly provided a detailed example [here](https://github.com/ptaoussanis/sente/issues/62#issuecomment-58790741).
+
+Recall that server-side `event-msg`s are of the form `{:ring-req _ :event _ :?reply-fn _}`, so each server-side event is accompanied by the relevant[*] Ring request.
+
+> For WebSocket events this is the initial Ring HTTP handshake request, for Ajax events it's just the Ring HTTP Ajax request.
+
+The Ring request's `:session` key is an immutable value, so how do you modify a session in response to an event? You won't be doing this often, but it can be handy (e.g. for login/logout forms).
+
+You've got two choices:
+
+1. Write any changes directly to your Ring SessionStore (i.e. the mutable state that's actually backing your sessions). You'll need the relevant user's session key, which you can find under your Ring request's `:cookies` key. This is flexible, but requires that you know how+where your session data is being stored.
+
+2. Just use regular HTTP Ajax requests for stuff that needs to modify sessions (like login/logout), since these will automatically go through the usual Ring session middleware and let you modify a session with a simple `{:status 200 :session <new-session>}` response. This is the strategy the reference example takes.
+
+#### Lifecycle management (component management/shutdown, etc.)
+
+Using something like [stuartsierra/component] or [palletops/leaven]?
+
+Most of Sente's state is held internally to each channel socket (the map returned from client/server calls to `make-channel-socket!`). The absence of global state makes things like testing, and running multiple concurrent connections easy. It also makes integration with your component management easy.
+
+The only thing you _may_[1] want to do on component shutdown is stop any router loops that you've created to dispatch events to handlers. The client/server side `start-chsk-router!` fns both return a `(fn stop [])` that you can call to do this.
+
+> [1] The cost of _not_ doing this is actually negligible (a single parked go thread).
+
+There's also a couple lifecycle libraries that include Sente components:
+
+  1. [danielsz/system] for use with [stuartsierra/component].
+  2. [palletops/bakery] for use with [palletops/leaven].
+
+If you do want a lifecycle management lib, I'm personally fond of Leaven since it's simpler (no auto dependencies) and adds ClojureScript support (which is handy for Sente).
+
+#### Any other examples?
+
+Here's some more unofficial/**user-submitted** examples for those interested! (**PRs welcome!**):
+
+Example          | Author        | Comments                                         |
+---------------- | ------------- | ------------------------------------------------ |
+[om-mouse]       | [@tf0054]     | Basic example: tracks mouse pos using Om.        |
 
 #### Any other questions?
 
@@ -269,13 +303,13 @@ Otherwise reach me (Peter Taoussanis) at [taoensso.com][] or on [Twitter][]. Che
 
 Copyright &copy; 2012-2014 Peter Taoussanis. Distributed under the [Eclipse Public License][], the same as Clojure.
 
-
 [API docs]: <http://ptaoussanis.github.io/sente/>
 [CHANGELOG_]: <https://github.com/ptaoussanis/sente/blob/master/CHANGELOG.md>
 [CHANGELOG]: <https://github.com/ptaoussanis/sente/releases>
 [other Clojure libs]: <https://www.taoensso.com/clojure-libraries>
 [Twitter]: <https://twitter.com/ptaoussanis>
-[semantic]: <http://semver.org/>
+[SemVer]: <http://semver.org/>
+[Break Version]: <https://github.com/ptaoussanis/encore/blob/master/BREAK-VERSIONING.md>
 [reference example project]: <https://github.com/ptaoussanis/sente/tree/master/example-project>
 [Leiningen]: <http://leiningen.org/>
 [CDS]: <http://clojure-doc.org/>
@@ -288,10 +322,15 @@ Copyright &copy; 2012-2014 Peter Taoussanis. Distributed under the [Eclipse Publ
 [Go]: <http://en.wikipedia.org/wiki/Go_game>
 [edn]: <https://github.com/edn-format/edn>
 [http-kit]: <https://github.com/http-kit/http-kit>
-[core.match]: <https://github.com/clojure/core.match>
 [React]: <http://facebook.github.io/react/>
 [Reagent]: <https://github.com/holmsand/reagent>
 [Om]: <https://github.com/swannodette/om>
 [Chord]: <https://github.com/james-henderson/chord>
 [jetty7-websockets-async]: <https://github.com/lynaghk/jetty7-websockets-async>
 [Socket.IO]: <http://socket.io/>
+[om-mouse]: <https://git.geekli.st/tf0054/om-mouse/tree/master>
+[@tf0054]: https://github.com/tf0054
+[stuartsierra/component]: https://github.com/stuartsierra/component
+[danielsz/system]: https://github.com/danielsz/system
+[palletops/leaven]: https://github.com/palletops/leaven
+[palletops/bakery]: https://github.com/palletops/bakery
