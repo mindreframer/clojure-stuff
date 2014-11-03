@@ -1,8 +1,7 @@
 (ns puppetlabs.trapperkeeper.services-test
   (:require [clojure.test :refer :all]
             [puppetlabs.trapperkeeper.services :refer
-                [ServiceDefinition Service Lifecycle
-                 defservice service service-context]]
+                [defservice service] :as svcs]
             [puppetlabs.trapperkeeper.app :as app]
             [puppetlabs.trapperkeeper.testutils.bootstrap :refer
                 [bootstrap-services-with-empty-config
@@ -11,6 +10,8 @@
             [puppetlabs.kitchensink.testutils.fixtures :refer [with-no-jvm-shutdown-hooks]]))
 
 (use-fixtures :once schema-test/validate-schemas with-no-jvm-shutdown-hooks)
+
+(defprotocol EmptyService)
 
 (defprotocol HelloService
   (hello [this msg]))
@@ -24,7 +25,7 @@
 
 (deftest test-satisfies-protocols
   (testing "creates a service definition"
-    (satisfies? ServiceDefinition hello-service))
+    (is (satisfies? svcs/ServiceDefinition hello-service)))
 
   (let [app (bootstrap-services-with-empty-config [hello-service])]
     (testing "app satisfies protocol"
@@ -32,8 +33,8 @@
 
     (let [h-s (app/get-service app :HelloService)]
       (testing "service satisfies all protocols"
-        (is (satisfies? Lifecycle h-s))
-        (is (satisfies? Service h-s))
+        (is (satisfies? svcs/Lifecycle h-s))
+        (is (satisfies? svcs/Service h-s))
         (is (satisfies? HelloService h-s)))
 
       (testing "service functions behave as expected"
@@ -89,13 +90,13 @@
           service1 (service Service1
                             []
                             (init [this context]
-                                  (swap! test-context assoc :init-service-id (service-id this))
+                                  (swap! test-context assoc :init-service-id (svcs/service-id this))
                                   context)
                             (start [this context]
-                                   (swap! test-context assoc :start-service-id (service-id this))
+                                   (swap! test-context assoc :start-service-id (svcs/service-id this))
                                    context)
                             (stop [this context]
-                                  (swap! test-context assoc :stop-service-id (service-id this))
+                                  (swap! test-context assoc :stop-service-id (svcs/service-id this))
                                   context)
                             (service1-fn [this] nil))]
       (with-app-with-empty-config app [service1]
@@ -124,9 +125,9 @@
           service2 (service Service2
                             [[:Service1 service1-fn]]
                             (init [this context]
-                                  (let [s1 (get-service this :Service1)]
+                                  (let [s1 (svcs/get-service this :Service1)]
                                     (assoc context :s1 s1)))
-                            (service2-fn [this] ((service-context this) :s1)))
+                            (service2-fn [this] ((svcs/service-context this) :s1)))
           app               (bootstrap-services-with-empty-config [service1 service2])
           s2                (app/get-service app :Service2)
           s1                (service2-fn s2)]
@@ -136,7 +137,7 @@
   (testing "an error should be thrown if calling get-service on a non-existent service"
     (let [service1 (service Service1
                             []
-                            (service1-fn [this] (get-service this :NonExistent)))
+                            (service1-fn [this] (svcs/get-service this :NonExistent)))
           app               (bootstrap-services-with-empty-config [service1])
           s1                (app/get-service app :Service1)]
       (is (thrown-with-msg?
@@ -170,25 +171,59 @@
           s4        (app/get-service app :Service4)]
       (is (= "foo! bar!" (service4-fn2 s4))))))
 
+(defservice service1
+  Service1
+  []
+  (init [this context] "hi")
+  (service1-fn [this] "hi"))
+
+(defservice service1-alt
+  Service1
+  []
+  (start [this context] "hi")
+  (service1-fn [this] "hi"))
+
 (deftest context-test
   (testing "should error if lifecycle function doesn't return context"
+    (is (thrown-with-msg?
+          IllegalStateException
+          (re-pattern (str "Lifecycle function 'init' for service "
+                           "'puppetlabs.trapperkeeper.services-test/service1'"
+                           " must return a context map \\(got: \"hi\"\\)"))
+          (bootstrap-services-with-empty-config [service1]))
+        "Unexpected shutdown reason for bootstrap")
+    (is (thrown-with-msg?
+          IllegalStateException
+          (re-pattern (str "Lifecycle function 'start' for service "
+                           "'puppetlabs.trapperkeeper.services-test/service1-alt'"
+                           " must return a context map "
+                           "\\(got: \"hi\"\\)"))
+          (bootstrap-services-with-empty-config [service1-alt]))
+        "Unexpected shutdown reason for bootstrap"))
+
+  (testing "lifecycle error works if service has no service symbol"
     (let [service1 (service Service1
                             []
                             (init [this context] "hi")
                             (service1-fn [this] "hi"))]
       (is (thrown-with-msg?
             IllegalStateException
-            #"Lifecycle function 'init' for service ':Service1' must return a context map \(got: \"hi\"\)"
-            (bootstrap-services-with-empty-config [service1]))))
-
+            (re-pattern (str "Lifecycle function 'init' for service ':Service1'"
+                             " must return a context map \\(got: \"hi\"\\)"))
+            (bootstrap-services-with-empty-config [service1]))
+          "Unexpected shutdown reason for bootstrap"))
     (let [service1 (service Service1
                             []
                             (start [this context] "hi")
                             (service1-fn [this] "hi"))]
+
       (is (thrown-with-msg?
             IllegalStateException
-            #"Lifecycle function 'start' for service ':Service1' must return a context map \(got: \"hi\"\)"
-            (bootstrap-services-with-empty-config [service1])))))
+            (re-pattern (str "Lifecycle function 'start' for service "
+                             "':Service1' must return a context map "
+                             "\\(got: \"hi\"\\)"))
+            (bootstrap-services-with-empty-config [service1]))
+          "Unexpected shutdown reason for bootstrap")))
 
   (testing "context should be available in subsequent lifecycle functions"
     (let [start-context (atom nil)
@@ -205,18 +240,18 @@
           service1 (service Service1
                             []
                             (init [this context] (assoc context :foo :bar))
-                            (service1-fn [this] (reset! sfn-context (service-context this))))
+                            (service1-fn [this] (reset! sfn-context (svcs/service-context this))))
           app (bootstrap-services-with-empty-config [service1])
           s1  (app/get-service app :Service1)]
       (service1-fn s1)
       (is (= {:foo :bar} @sfn-context))
-      (is (= {:foo :bar} (service-context s1)))))
+      (is (= {:foo :bar} (svcs/service-context s1)))))
 
   (testing "context works correctly in injected functions"
     (let [service1 (service Service1
                             []
                             (init [this context] (assoc context :foo :bar))
-                            (service1-fn [this] ((service-context this) :foo)))
+                            (service1-fn [this] ((svcs/service-context this) :foo)))
           service2 (service Service2
                             [[:Service1 service1-fn]]
                             (service2-fn [this] (service1-fn)))
@@ -228,7 +263,7 @@
     (let [service4 (service Service4
                             []
                             (init [this context] (assoc context :foo :bar))
-                            (service4-fn1 [this] ((service-context this) :foo))
+                            (service4-fn1 [this] ((svcs/service-context this) :foo))
                             (service4-fn2 [this] (service4-fn1 this)))
           app (bootstrap-services-with-empty-config [service4])
           s4  (app/get-service app :Service4)]
@@ -242,11 +277,37 @@
                             (service1-fn [this] "hi"))
           service2 (service Service2
                             [[:Service1 service1-fn]]
-                            (start [this context] (reset! s2-context (service-context this)))
+                            (start [this context] (reset! s2-context (svcs/service-context this)))
                             (service2-fn [this] "hi"))
 
           app (bootstrap-services-with-empty-config [service1 service2])]
       (is (= {} @s2-context)))))
+
+(deftest service-symbol-test
+  (testing "service defined via `defservice` has a service symbol"
+    (with-app-with-empty-config app [hello-service]
+      (let [svc (app/get-service app :HelloService)]
+        (is (= (symbol "puppetlabs.trapperkeeper.services-test" "hello-service")
+               (svcs/service-symbol svc))))))
+  (testing "service defined via `service` does not have a service symbol"
+    (let [empty-svc (service EmptyService [])]
+      (with-app-with-empty-config app [empty-svc]
+        (let [svc (app/get-service app :EmptyService)]
+          (is (= :EmptyService (svcs/service-id svc)))
+          (is (nil? (svcs/service-symbol svc))))))))
+
+(deftest get-services-test
+  (testing "get-services should return all services"
+    (let [empty-service (service EmptyService [])]
+      (with-app-with-empty-config app [empty-service hello-service]
+        (let [empty (app/get-service app :EmptyService)
+              hello (app/get-service app :HelloService)]
+          (doseq [s [empty hello]]
+            (let [all-services (svcs/get-services s)]
+              (is (= 2 (count all-services)))
+              (is (every? #(satisfies? svcs/Service %) all-services))
+              (is (= #{:EmptyService :HelloService}
+                     (set (map svcs/service-id all-services)))))))))))
 
 (deftest minimal-services-test
   (testing "minimal services can be defined without a protocol"
