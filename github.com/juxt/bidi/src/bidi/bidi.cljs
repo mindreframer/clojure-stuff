@@ -1,4 +1,4 @@
-;; Copyright © 2013, JUXT LTD. All Rights Reserved.
+; Copyright © 2013, JUXT LTD. All Rights Reserved.
 ;;
 ;; The use and distribution terms for this software are covered by the
 ;; Eclipse Public License 1.0 (http://opensource.org/licenses/eclipse-1.0.php)
@@ -11,20 +11,9 @@
 
 (ns bidi.bidi
   (:require
-   [clojure.core.match :refer (match)]
-   [clojure.java.io :as io]
-   [clojure.walk :refer (postwalk)]
-   [ring.util.response :refer (file-response url-response)]
-   [ring.middleware.content-type :refer (wrap-content-type)]
-   [ring.middleware.file-info :refer (wrap-file-info)]
-   [ring.util.codec :refer (form-encode)]
-   [clojure.core.match :refer [match]])
-  (:import
-   (clojure.lang PersistentVector Symbol Keyword PersistentArrayMap PersistentHashMap PersistentHashSet PersistentList Fn LazySeq Var)
-   (java.net URLEncoder URLDecoder)))
+   [clojure.walk :refer (postwalk)]))
 
-(defn decode [s]
-  (URLDecoder/decode s))
+(enable-console-print!)
 
 ;; --------------------------------------------------------------------------------
 ;; 1 & 2 Make it work and make it right
@@ -40,15 +29,11 @@
 (extend-protocol ParameterEncoding
   ;; We don't URL encode strings, we leave the choice of whether to do so
   ;; to the caller.
-  String
+  string
   (encode-parameter [s] s)
 
-  CharSequence
+  number
   (encode-parameter [s] s)
-
-  Long
-  (encode-parameter [s] s)
-
 
   ;; We do URL encode keywords, however. Namespaced
   ;; keywords use a separated of %2F (a URL encoded forward slash).
@@ -84,13 +69,13 @@
   (matches? [_ s]))
 
 (extend-protocol PatternSegment
-  String
-  (segment-regex-group [this] (format "\\Q%s\\E" this))
+  string
+  (segment-regex-group [this] this) ; TODO Is there a JS equiv of //Q //E ?
   (param-key [_] nil)
   (transform-param [_] identity)
-  (unmatch-segment [this _] {:path [this]})
+  (unmatch-segment [this _] this)
 
-  java.util.regex.Pattern
+  js/RegExp
   (segment-regex-group [this] (.pattern this))
   (param-key [_] nil)
   (transform-param [_] identity)
@@ -103,19 +88,24 @@
   (param-key [this] (let [k (second this)]
                       (if (keyword? k)
                         k
-                        (throw (ex-info (format "If a PatternSegment is represented by a vector, the second element must be the keyword associated with the pattern: %s" this) {})))))
-  (transform-param [this] (transform-param (first this)))
+                        (throw (ex-info (str "If a PatternSegment is represented by a vector, the second element must be the keyword associated with the pattern: " this) {})))))
+  (transform-param [[f _]]
+    (if (fn? f)
+      (condp = f
+        ;; keyword is close, but must be applied to a decoded string, to work with namespaced keywords
+        keyword (comp keyword #(js/decodeURIComponent %))
+        (throw (ex-info (str "Unrecognized function " f) {})))
+      identity))
+
   (unmatch-segment [this params]
     (let [k (second this)]
       (if-not (keyword? k)
-        (throw (ex-info (format "If a PatternSegment is represented by a vector, the second element must be the key associated with the pattern: %s" this) {})))
-      {:path [k]
-       :params [[k
-                 #(if-let [v (get params k)]
-                    (if (matches? (first this) v)
-                      (encode-parameter v)
-                      (throw (ex-info (format "Parameter value of %s (key %s) is not compatible with the route pattern %s" v k this) {})))
-                    (throw (ex-info (format "No parameter found in params for key %s" k) {})))]]}))
+        (throw (ex-info (str "If a PatternSegment is represented by a vector, the second element must be the key associated with the pattern: " this) {})))
+      (if-let [v (get params k)]
+        (if (matches? (first this) v)
+          (encode-parameter v)
+          (throw (ex-info (str "Parameter value of " v " (key " k ") is not compatible with the route pattern " this) {})))
+        (throw (ex-info (str "No parameter found in params for key " k) {})))))
 
   Keyword
   ;; This is a very common form, so we're conservative as a defence against injection attacks.
@@ -123,28 +113,17 @@
   (param-key [this] this)
   (transform-param [_] identity)
   (unmatch-segment [this params]
-    {:path [this]
-     :params [[this
-               #(if-let [v (this params)]
-                  (encode-parameter v)
-                  (throw (ex-info (format "Cannot form URI without a value given for %s parameter" this) {})))]]})
+    (if-let [v (this params)]
+      (encode-parameter v)
+      (throw (ex-info (str "Cannot form URI without a value given for " this " parameter ") {}))))
 
-  Fn
-  (segment-regex-group [this]
-    (condp = this
-     keyword "[A-Za-z]+[A-Za-z0-9\\*\\+\\!\\-\\_\\?\\.]*(?:%2F[A-Za-z]+[A-Za-z0-9\\*\\+\\!\\-\\_\\?\\.]*)?"
-     long "-?\\d{1,19}"
-     :otherwise (throw (ex-info (format "Unidentified function qualifier to pattern segment: %s" this) {}))))
-  (transform-param [this]
-    (condp = this
-      ;; keyword is close, but must be applied to a decoded string, to work with namespaced keywords
-      keyword (comp keyword decode)
-      long #(Long/parseLong %)
-      (throw (ex-info (format "Unrecognized function" this) {}))))
-  (matches? [this s]
-    (condp = this
-      keyword (keyword? s)
-      long (some #(instance? % s) [Byte Short Integer Long]))))
+  #_IFn
+  #_(segment-regex-group [this]
+    (cond
+     (= this keyword) "[A-Za-z]+[A-Za-z0-9\\*\\+\\!\\-\\_\\?\\.]*(?:%2F[A-Za-z]+[A-Za-z0-9\\*\\+\\!\\-\\_\\?\\.]*)?"
+     :otherwise (throw (ex-info (str "Unidentified function qualifier to pattern segment: " this) {}))))
+  #_(matches? [this s]
+    (when (= this keyword) (keyword? s))))
 
 ;; A Route is a pair. The pair has two halves: a pattern on the left,
 ;; while the right contains the result if the pattern matches.
@@ -153,7 +132,7 @@
   ;; Return truthy if the given pattern matches the given path. By
   ;; truthy, we mean a map containing (at least) the rest of the path to
   ;; match in a :remainder entry
-  (match-pattern [_ ^String path])
+  (match-pattern [_ path])
   (unmatch-pattern [_ m]))
 
 (defprotocol Matched
@@ -182,15 +161,15 @@
 
 (extend-protocol Pattern
 
-  String
+  string
   (match-pattern [this env]
-    (match-beginning (format "(%s)" (segment-regex-group this)) env))
-  (unmatch-pattern [this _] {:path [this]})
+    (match-beginning (str "(" (segment-regex-group this) ")") env))
+  (unmatch-pattern [this _] this)
 
-  java.util.regex.Pattern
-  (match-pattern [this env] (match-beginning (format "(%s)" (segment-regex-group this)) env))
+  js/RegExp
+  (match-pattern [this env] (match-beginning (str "(" (segment-regex-group this) ")") env))
 
-  Boolean
+  boolean
   (match-pattern [this env]
     (when this (assoc env :remainder "")))
 
@@ -200,7 +179,7 @@
                        ;; Make regexes of each segment in the vector
                        (map segment-regex-group %)
                        ;; Form a regexes group from each
-                       (map (partial format "(%s)") %)
+                       (map (fn [x] (str "(" x ")")) %)
                        (reduce str %)
                        ;; Add the 'remainder' group
                        (str % "(.*)")
@@ -222,12 +201,11 @@
             (update-in [:route-params] merge params)))))
 
   (unmatch-pattern [this m]
-    (apply merge-with concat
-           (map #(unmatch-segment % (:params m)) this)))
+    (apply str (map #(unmatch-segment % (:params m)) this)))
 
   Keyword
   (match-pattern [this env] (when (= this (:request-method env)) env))
-  (unmatch-pattern [this _] nil)
+  (unmatch-pattern [_ _] "")
 
   PersistentArrayMap
   (match-pattern [this env]
@@ -237,113 +215,79 @@
                      :otherwise (= v (get env k))))
                   (seq this))
       env))
-  (unmatch-pattern [_ _] nil))
+  (unmatch-pattern [_ _] ""))
 
 (defn unmatch-pair [v m]
   (when-let [r (unresolve-handler (second v) m)]
-    (merge-with concat (unmatch-pattern (first v) m) r)))
+    (str (unmatch-pattern (first v) m) r)))
 
 (extend-protocol Matched
-  String
+  string
   (unresolve-handler [_ _] nil)
 
   PersistentVector
-  (resolve-handler [this m] (some #(match-pair % m) this))
-  (unresolve-handler [this m] (some #(unmatch-pair % m) this))
-
-  PersistentList
-  (resolve-handler [this m] (some #(match-pair % m) this))
-  (unresolve-handler [this m] (some #(unmatch-pair % m) this))
+  (resolve-handler [this m] (first (keep #(match-pair % m) this)))
+  (unresolve-handler [this m] (first (keep #(unmatch-pair % m) this)))
 
   PersistentArrayMap
-  (resolve-handler [this m] (some #(match-pair % m) this))
-  (unresolve-handler [this m] (some #(unmatch-pair % m) this))
+  (resolve-handler [this m] (first (keep #(match-pair % m) this)))
+  (unresolve-handler [this m] (first (keep #(unmatch-pair % m) this)))
 
   PersistentHashMap
-  (resolve-handler [this m] (some #(match-pair % m) this))
-  (unresolve-handler [this m] (some #(unmatch-pair % m) this))
+  (resolve-handler [this m] (first (keep #(match-pair % m) this)))
+  (unresolve-handler [this m] (first (keep #(unmatch-pair % m) this)))
 
   LazySeq
-  (resolve-handler [this m] (some #(match-pair % m) this))
-  (unresolve-handler [this m] (some #(unmatch-pair % m) this))
+  (resolve-handler [this m] (first (keep #(match-pair % m) this)))
+  (unresolve-handler [this m] (first (keep #(unmatch-pair % m) this)))
 
-  Symbol
+  symbol
   (resolve-handler [this m] (succeed this m))
   (unresolve-handler [this m] (when (= this (:handler m)) ""))
 
-  Var
-  (resolve-handler [this m] (succeed this m))
-  (unresolve-handler [this m] (when (= this (:handler m)) ""))
+  #_var
+  #_(resolve-handler [this m] (succeed this m))
+  #_(unresolve-handler [this m] (when (= this (:handler m)) ""))
 
   Keyword
   (resolve-handler [this m] (succeed this m))
   (unresolve-handler [this m] (when (= this (:handler m)) ""))
 
-  Fn
-  (resolve-handler [this m] (succeed this m))
-  (unresolve-handler [this m] (when (= this (:handler m)) "")))
+  #_Fn
+  #_(resolve-handler [this m] (succeed this m))
+  #_(unresolve-handler [this m] (when (= this (:handler m)) "")))
 
 (defn match-route
   "Given a route definition data structure and a path, return the
   handler, if any, that matches the path."
   [route path & {:as options}]
   (->
-   (match-pair route (merge options {:remainder path :route route}))
+     (match-pair route (merge options {:remainder path :route route}))
    (dissoc :route)))
 
-(defn- path-and-params
-  [route handler params]
+(defn path-for
+  "Given a route definition data structure and an option map, return a
+  path that would route to the handler entry in the map. The map must
+  also contain the values to any parameters required to create the path."
+  [route handler & {:as params}]
   (when (nil? handler)
     (throw (ex-info "Cannot form URI from a nil handler" {})))
-  (let [{:keys [path params]} (unmatch-pair route {:handler handler :params params})]
-    {:path path
-     :params (into {} params)}))
-
-(defn route-params
-  "Given a route definition data structure and a handler returns a set of the params which
-   must be satisfied in order to construct the path to that handler"
-  [route handler]
-  (set (keys (:params (path-and-params route handler {})))))
-
-(defn path-for
-  "Given a route definition data structure, a handler and an option map, return a
-  path that would route to the handler. The map must contain the values to any
-  parameters required to create the path, and extra values are silently ignored."
-  [route handler & {:as params}]
-  (let [{:keys [path params]} (path-and-params route handler params)]
-    (reduce (fn [url token]
-              (str url (if-let [f (get params token)]
-                         (f)
-                         token))) path)))
-
-(defn path-with-query-for
-  "Like path-for, but extra parameters will be appended to the url as query parameters
-   rather than silently ignored"
-  [route handler & {:as all-params}]
-  (let [{:keys [path params]} (path-and-params route handler all-params)
-        path (reduce (fn [url token]
-                       (str url (if-let [f (get params token)]
-                                  (f)
-                                  token))) path)
-        query-params (not-empty (into (sorted-map) (apply dissoc all-params (keys params))))]
-    (apply str path (when query-params
-                      ["?" (form-encode query-params)]))))
+  (unmatch-pair route {:handler handler :params params}))
 
 (defn make-handler
   "Create a Ring handler from the route definition data
   structure. Matches a handler from the uri in the request, and invokes
   it with the request as a parameter."
-  ([route handler-fn]
-      (assert route "Cannot create a Ring handler with a nil Route(s) parameter")
-      (fn [{:keys [uri path-info] :as request}]
-        (let [path (or path-info uri)
-              {:keys [handler route-params]} (apply match-route route path (apply concat (seq request)))]
-          (when handler
-            ((handler-fn handler)
-             (-> request
-                 (update-in [:params] merge route-params)
-                 (update-in [:route-params] merge route-params)))))))
-   ([route] (make-handler route identity)))
+  [route]
+  (assert route "Cannot create a Ring handler with a nil Route(s) parameter")
+  (fn [{:keys [uri path-info] :as request}]
+    (let [path (or path-info uri)
+          {:keys [handler route-params]} (apply match-route route path (apply concat (seq request)))]
+      (when handler
+        (handler
+         (-> request
+             (update-in [:params] merge route-params)
+             (update-in [:route-params] merge route-params)))))))
 
 ;; Any types can be used which satisfy bidi protocols.
 
@@ -372,7 +316,7 @@
   Matched
   (resolve-handler [this m]
     (assoc (dissoc m :remainder)
-      :handler (if-let [res (io/resource (str (:prefix options) (decode (:remainder m))))]
+      :handler (if-let [res (io/resource (str (:prefix options) (:remainder m)))]
                  (-> (fn [req] (url-response res))
                      (wrap-file-info (:mime-types options))
                      (wrap-content-type options))
@@ -390,7 +334,7 @@
 (defrecord ResourcesMaybe [options]
   Matched
   (resolve-handler [this m]
-    (when-let [res (io/resource (str (:prefix options) (decode (:remainder m))))]
+    (when-let [res (io/resource (str (:prefix options) (:remainder m)))]
       (assoc (dissoc m :remainder)
         :handler (-> (fn [req] (url-response res))
                      (wrap-file-info (:mime-types options))
@@ -403,8 +347,7 @@
   Matched
   (resolve-handler [this m]
     (assoc (dissoc m :remainder)
-      :handler (-> (fn [req] (file-response (decode (:remainder m))
-                                            {:root (:dir options)}))
+      :handler (-> (fn [req] (file-response (:remainder m) {:root (:dir options)}))
                    (wrap-file-info (:mime-types options))
                    (wrap-content-type options))))
   (unresolve-handler [this m] nil))
@@ -449,11 +392,11 @@
   (match-pattern [this env]
     (when-let [path (last (re-matches regex (:remainder env)))]
       (assoc env :remainder path)))
-  (unmatch-pattern [this env] {:path [prefix]}))
+  (unmatch-pattern [this env] prefix))
 
 (defn compile-prefix
   "Improve performance by composing the regex pattern ahead of time."
-  [s] (->CompiledPrefix s (re-pattern (format "\\Q%s\\E(.*)" s))))
+  [s] (->CompiledPrefix s (re-pattern (str "\\Q" s "\\E(.*)"))))
 
 (defn compile-route [route]
   (postwalk

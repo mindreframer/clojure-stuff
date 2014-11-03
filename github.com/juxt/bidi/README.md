@@ -118,7 +118,7 @@ HTTP servers (including Jetty, [http-kit](http://http-kit.org/) and
 Add the following dependency to your `project.clj` file
 
 ```clojure
-[bidi "1.10.1"]
+[bidi "1.10.4"]
 ```
 
 ## Take 5 minutes to learn bidi (using the REPL)
@@ -359,7 +359,7 @@ RouteStructure := RoutePair
 
 RoutePair ::= [ Pattern Matched ]
 
-Pattern ::= Path | [ PatternSegment+ ] | MethodGuard | GeneralGuard
+Pattern ::= Path | [ PatternSegment+ ] | MethodGuard | GeneralGuard | true | false
 
 MethodGuard ::= :get :post :put :delete :head :options
 
@@ -420,9 +420,30 @@ to new ones) after refactoring. You can also use it for the common
 practice of adding a *welcome page* suffix, for example, adding
 `index.html` to a URI ending in `/`.
 
+### Resources and ResourcesMaybe
+
+The `Resources` and `ResourcesMaybe` record can be used on the
+right-hand side of a route. It serves resources from the
+classpath. After the pattern is matched, the remaining part of the path
+is added to the given prefix.
+
+```clojure
+["/resources" (->ResourcesMaybe {:prefix "public/"})
+```
+
+There is an important difference between `Resources` and `ResourcesMaybe`. `Resources` will return a 404 response if the resource cannot be found, while `ResourcesMaybe` will return nil, allowing subsequent routes to be tried.
+
+### Files
+
+Similar to `Resources`, `Files` will serve files from a file-system.
+
+```clojure
+["pics/" (->Files {:dir "/tmp/pics"})]
+```
+
 ### WrapMiddleware
 
-You can wrap the resulting handler in Ring middleware as usual. But
+You can wrap the target handler in Ring middleware as usual. But
 sometimes you need to specify that the handlers from certain patterns
 are wrapped in particular middleware.
 
@@ -432,6 +453,15 @@ For example :-
 (match-route ["/index.html" (->WrapMiddleware handler wrap-params)]
              "/index.html")
 ```
+
+Use this with caution. If you are using this _you are probably doing it wrong_.
+
+Bidi separates URI routing from request handling. Ring middleware is
+something that should apply to handlers, not routes. If you have a set
+of middleware common to a group of handlers, you should apply the
+middleware to each handler in turn, rather than use
+`->WrapMiddleware`. Better to map a middleware applying function over
+your handlers rather than use this feature.
 
 ### Alternates
 
@@ -543,13 +573,16 @@ Ran 9 tests containing 47 assertions.
 
 A big thank you to everyone who have helped bidi so far, including
 
+* Malcolm Sparks
 * Dene Simpson
 * James Henderson
 * Matt Mitchell
+* Neale Swinnerton
+* Oliy Hine
 
 ## License
 
-Copyright © 2013, JUXT LTD. All Rights Reserved.
+Copyright © 2013-2014, JUXT LTD. All Rights Reserved.
 
 Distributed under the Eclipse Public License either version 1.0 or (at
 your option) any later version.
