@@ -23,14 +23,16 @@
 (defn pred-<= [k v]     (infix k "<=" v))
 (defn pred-like [k v]   (infix k "LIKE" v))
 
+(defn pred-exists [v]   (wrapper "EXISTS" v))
+
 (defn pred-between [k [v1 v2]]
   (trinary k "BETWEEN" v1 "AND" v2))
 
 (def pred-= eng/pred-=)
 (defn pred-not= [k v] (cond
-                        (and k v) (infix k "<>" v)
-                        k         (infix k "IS NOT" v)
-                        v         (infix v "IS NOT" k)))
+                       (and k v) (infix k "<>" v)
+                       k         (infix k "IS NOT" v)
+                       v         (infix v "IS NOT" k)))
 
 ;;*****************************************************
 ;; Aggregates
@@ -38,7 +40,7 @@
 
 (defn- subprotocol [query]
   (let [default (get-in @db/_default [:options :subprotocol])]
-     (or (get-in query [:db :options :subprotocol]) default)))
+    (or (get-in query [:db :options :subprotocol]) default)))
 
 (defn agg-count [query v]
   (if (= "mysql" (subprotocol query))

@@ -6,6 +6,9 @@
 
 (defonce _default (atom nil))
 
+(def ^:dynamic *current-db* nil)
+(def ^:dynamic *current-conn* nil)
+
 (defn default-connection
   "Set the database connection that Korma should use by default when no
   alternative is specified."
@@ -16,13 +19,15 @@
 (defn connection-pool
   "Create a connection pool for the given database spec."
   [{:keys [subprotocol subname classname user password
-           excess-timeout idle-timeout minimum-pool-size maximum-pool-size
+           excess-timeout idle-timeout
+           initial-pool-size minimum-pool-size maximum-pool-size
            test-connection-query
            idle-connection-test-period
            test-connection-on-checkin
            test-connection-on-checkout]
     :or {excess-timeout (* 30 60)
          idle-timeout (* 3 60 60)
+         initial-pool-size 3
          minimum-pool-size 3
          maximum-pool-size 15
          test-connection-query nil
@@ -37,6 +42,7 @@
                  (.setPassword password)
                  (.setMaxIdleTimeExcessConnections excess-timeout)
                  (.setMaxIdleTime idle-timeout)
+                 (.setInitialPoolSize initial-pool-size)
                  (.setMinPoolSize minimum-pool-size)
                  (.setMaxPoolSize maximum-pool-size)
                  (.setIdleConnectionTestPeriod idle-connection-test-period)
@@ -60,12 +66,13 @@
         db))))
 
 (defn create-db
-  "Create a db connection object manually instead of using defdb. This is often useful for
-  creating connections dynamically, and probably should be followed up with:
+  "Create a db connection object manually instead of using defdb. This is often
+   useful for creating connections dynamically, and probably should be followed
+   up with:
 
-  (default-connection my-new-conn)
+   (default-connection my-new-conn)
 
-  If the spec includes `:make-pool? true` makes a connection pool from the spec."
+   If the spec includes `:make-pool? true` makes a connection pool from the spec."
   [spec]
   {:pool (if (:make-pool? spec)
            (delay-pool spec)
@@ -73,16 +80,29 @@
    :options (conf/extract-options spec)})
 
 (defmacro defdb
-  "Define a database specification. The last evaluated defdb will be used by default
-  for all queries where no database is specified by the entity."
+  "Define a database specification. The last evaluated defdb will be used by
+  default for all queries where no database is specified by the entity."
   [db-name spec]
   `(let [spec# ~spec]
      (defonce ~db-name (create-db spec#))
      (default-connection ~db-name)))
 
+(defn firebird
+  "Create a database specification for a FirebirdSQL database. Opts should include
+  keys for :db, :user, :password. You can also optionally set host, port, make-pool? and encoding"
+  [{:keys [host port db make-pool? encoding]
+    :or {host "localhost", port 3050, db "", make-pool? true, encoding "UTF8"}
+    :as opts}]
+  (merge {:classname "org.firebirdsql.jdbc.FBDriver" ; must be in classpath
+          :subprotocol "firebirdsql"
+          :subname (str host "/" port ":" db "?encoding=" encoding)
+          :make-pool? make-pool?}
+         opts))
+
 (defn postgres
-  "Create a database specification for a postgres database. Opts should include keys
-  for :db, :user, and :password. You can also optionally set host and port."
+  "Create a database specification for a postgres database. Opts should include
+  keys for :db, :user, and :password. You can also optionally set host and
+  port."
   [{:keys [host port db make-pool?]
     :or {host "localhost", port 5432, db "", make-pool? true}
     :as opts}]
@@ -117,6 +137,21 @@
           :delimiters "`"
           :make-pool? make-pool?}
          opts))
+
+(defn vertica
+  "Create a database specification for a vertica database. Opts should include keys
+  for :db, :user, and :password. You can also optionally set host and port.
+  Delimiters are automatically set to \"`\"."
+  [{:keys [host port db make-pool?]
+    :or {host "localhost", port 5433, db "", make-pool? true}
+    :as opts}]
+  (merge {:classname "com.vertica.jdbc.Driver" ; must be in classpath
+          :subprotocol "vertica"
+          :subname (str "//" host ":" port "/" db)
+          :delimiters "\""
+          :make-pool? make-pool?}
+         opts))
+
 
 (defn mssql
   "Create a database specification for a mssql database. Opts should include keys
@@ -157,8 +192,8 @@
          opts))
 
 (defn sqlite3
-  "Create a database specification for a SQLite3 database. Opts should include a key
-  for :db which is the path to the database file."
+  "Create a database specification for a SQLite3 database. Opts should include a
+  key for :db which is the path to the database file."
   [{:keys [db make-pool?]
     :or {db "sqlite.db", make-pool? true}
     :as opts}]
@@ -181,23 +216,28 @@
          opts))
 
 (defmacro transaction
-  "Execute all queries within the body in a single transaction."
+  "Execute all queries within the body in a single transaction.
+  Optionally takes as a first argument a map to specify the :isolation and :read-only? properties of the transaction."
+  {:arglists '([body] [options & body])}
   [& body]
-  `(if (jdbc/find-connection)
-     (jdbc/transaction ~@body)
-     (jdbc/with-connection (get-connection @_default)
-       (jdbc/transaction
-        ~@body))))
+  (let [options (first body)
+        check-options (and (-> body rest seq)
+                           (map? options))
+        {:keys [isolation read-only?]} (when check-options options)
+        body (if check-options (rest body) body)]
+    `(jdbc/with-db-transaction [conn# (or *current-conn* (get-connection @_default)) :isolation ~isolation :read-only? ~read-only?]
+       (binding [*current-conn* conn#]
+         ~@body))))
 
 (defn rollback
   "Tell this current transaction to rollback."
   []
-  (jdbc/set-rollback-only))
+  (jdbc/db-set-rollback-only! *current-conn*))
 
 (defn is-rollback?
   "Returns true if the current transaction will be rolled back"
   []
-  (jdbc/is-rollback-only))
+  (jdbc/db-is-rollback-only *current-conn*))
 
 (defn- handle-exception [e sql params]
   (if-not (instance? java.sql.SQLException e)
@@ -210,30 +250,28 @@
       (jdbc/print-sql-exception e)))
   (throw e))
 
-(defn- exec-sql [{:keys [results sql-str params]}]
-  (try
-    (case results
-      :results (jdbc/with-query-results rs (apply vector sql-str params)
-                 (vec rs))
-      :keys (jdbc/do-prepared-return-keys sql-str params)
-      (jdbc/do-prepared sql-str params))
-    (catch Exception e
-      (handle-exception e sql-str params))))
-
-(defn- ->naming-strategy [{:keys [keys fields]}]
-  {:keyword keys
-   :entity fields})
+(defn- exec-sql [{:keys [results sql-str params options]}]
+  (let [{:keys [keys]} (:naming (or options @conf/options))]
+    (try
+      (case results
+        :results (jdbc/query *current-conn*
+                             (apply vector sql-str params)
+                             :identifiers keys)
+        :keys (jdbc/db-do-prepared-return-keys *current-conn* sql-str params)
+        (jdbc/db-do-prepared *current-conn* sql-str params))
+      (catch Exception e
+        (handle-exception e sql-str params)))))
 
 (defmacro with-db
   "Execute all queries within the body using the given db spec"
   [db & body]
-  `(jdbc/with-connection (get-connection ~db)
-     ~@body))
+  `(jdbc/with-db-connection [conn# (korma.db/get-connection ~db)]
+     (binding [*current-db* ~db
+               *current-conn* conn#]
+       ~@body)))
 
-(defn do-query [{:keys [db options] :as query}]
-  (let [options (or options @conf/options)]
-    (jdbc/with-naming-strategy (->naming-strategy (:naming options))
-      (if (jdbc/find-connection)
-        (exec-sql query)
-        (with-db (or db @_default)
-          (exec-sql query))))))
+(defn do-query [{:keys [db] :as query}]
+  (if *current-conn*
+    (exec-sql query)
+    (with-db (or db @_default)
+      (exec-sql query))))

@@ -11,15 +11,14 @@ Tasty SQL for Clojure.
 Simply add Korma as a dependency to your lein project:
 
 ```clojure
-[korma "0.3.0-RC6"]
+[korma "0.4.0"]
 ```
 
-Note: korma depends on version 0.2.3 of jdbc, so if you have another dependency that requires a different version (like the migrations library [lobos](https://github.com/budu/lobos)), be sure to specify:
+Note: korma depends on version 0.3.5 of jdbc, so if you have another dependency that requires a different version (like the migrations library [lobos](https://github.com/budu/lobos)), be sure to specify:
 
 ```clojure
-[org.clojure/java.jdbc "0.2.3"]
+[org.clojure/java.jdbc "0.3.5"]
 ```
-
 ## Docs and Real Usage
 
 *   [http://sqlkorma.com](http://sqlkorma.com)
@@ -62,12 +61,12 @@ And include log4j in your project.clj:
 ;; executes: SELECT * FROM users
 
 (select users
-  (fields :usersname :id))
-;; executes: SELECT users.usersname, users.id FROM users
+  (fields :username :id))
+;; executes: SELECT users.username, users.id FROM users
 
 (select users
-  (where {:usersname "chris"}))
-;; executes: SELECT * FROM users WHERE (users.usersname = 'chris')
+  (where {:username "chris"}))
+;; executes: SELECT * FROM users WHERE (users.username = 'chris')
 
 (select users 
   (where {:active true})
@@ -77,21 +76,21 @@ And include log4j in your project.clj:
 ;; executes: SELECT * FROM users WHERE (users.active = TRUE) ORDER BY users.created DESC LIMIT 5 OFFSET 3
 
 (select users
-  (where (or (= :usersname "chris")
+  (where (or (= :username "chris")
              (= :email "chris@chris.com"))))
-;; executes: SELECT * FROM users WHERE (users.usersname = 'chris' OR users.email = 'chris@chris.com')
+;; executes: SELECT * FROM users WHERE (users.username = 'chris' OR users.email = 'chris@chris.com')
 
 (select users
-  (where {:usersname [like "chris"]
+  (where {:username [like "chris"]
           :status "active"
           :location [not= nil]))
-;; executes SELECT * FROM users WHERE (users.usersname LIKE 'chris' AND users.status = 'active' AND users.location IS NOT NULL)
+;; executes SELECT * FROM users WHERE (users.username LIKE 'chris' AND users.status = 'active' AND users.location IS NOT NULL)
 
 (select users
-  (where (or {:usersname "chris"
+  (where (or {:username "chris"
               :first "chris"}
              {:email [like "%@chris.com"]})))
-;; executes: SELECT * FROM users WHERE ((users.usersname = 'chris' AND users.first = 'chris') OR users.email LIKE '%@chris.com)'
+;; executes: SELECT * FROM users WHERE ((users.username = 'chris' AND users.first = 'chris') OR users.email LIKE '%@chris.com)'
 
 
 (defentity address
