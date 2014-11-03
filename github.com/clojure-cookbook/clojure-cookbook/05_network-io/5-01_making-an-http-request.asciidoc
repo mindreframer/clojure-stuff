@@ -1,0 +1,103 @@
+[[sec_http_request]]
+=== Making HTTP Requests
+[role="byline"]
+by John Cromartie
+
+==== Problem
+
+You want to make a simple HTTP GET or POST request.(((networking/web services, HTTP requests)))((("HTTP (Hypertext Transfer Protocol)", "GET/POST requests")))(((GET requests)))(((POST requests)))(((functions, slurp)))
+
+==== Solution
+
+Use +slurp+ to make simple HTTP GET requests:
+
+[source,clojure]
+----
+(slurp "http://example.com")
+;; -> "<!doctype html>\n<html>\n<head>\n    <title>Example Domain</title> ...
+----
+
+Use the +clj-http+ library to make GET, POST, and other requests with
+specific parameters or headers, to handle redirects and other special
+circumstances, or to get specific details about the response.(((clj-http library)))
+
+To follow along, add `[clj-http "0.7.7"]` to your project's
+dependencies, or use +lein-try+ to start a REPL:
+
+[source,shell-session]
+----
+$ lein try clj-http
+----
+
+Use +clj-http.client/get+ to make GET requests:
+
+[source,clojure]
+----
+(require '[clj-http.client :as http])
+
+(:status (http/get "http://clojure.org"))
+;; -> 200
+
+(-> (http/get "http://clojure.org")
+    :headers
+    (get "server"))
+;; -> "nginx"
+
+(-> (http/get "http://www.amazon.com/")
+    :cookies
+    keys)
+;; -> ("session-id" "session-id-time" "x-wl-uid" "skin")
+----
+
+Parameters can be included in both GET and POST requests. Use
++clj-http.client/post+ to make POST requests:
+
+[source,clojure]
+----
+(http/get "http://google.com/" {:query-params {:q "clojure"}})
+;; -> {:status 200 ...}
+
+(http/post "http://example.com" {:form-params {:username "joecoder"
+                                               :password "il0v3clojure"}})
+;; -> {:status 200 ...}
+----
+
+You can even use the +:multipart+ option to upload files, as from an
+HTML form via a web browser.
+
+==== Discussion
+
++slurp+ works to make HTTP GET requests because its arguments are
+passed to +clojure.java.io/reader+, which in turn correctly handles
+opening URL strings. This is totally sufficient for issuing a quick
+HTTP GET to a well-behaved URL. Unfortunately, this is where ++slurp++'s
+usefulness ends. Among other limitations, it will not behave correctly
+for responses with HTTP redirects.((("Clojure", "clojure.java.io/reader")))
+
++clj-http+ is an extremely flexible Clojure wrapper around the very
+robust Apache https://hc.apache.org/[HttpComponents library].(((Apache HttpComponents library))) Its features include convenient functions for other HTTP verbs like
+PUT and DELETE; for reading and sending cookies, headers, and other
+request metadata; for reading and writing data using streams, files, or
+byte arrays; and lots more. Refer to the
+https://github.com/dakrone/clj-http[GitHub repository] to learn about
+the huge variety of options available and to see many more examples.((("HTTP (Hypertext Transfer Protocol)", "PUT/DELETE requests")))(((Netflix's Hystrix library)))(((Hystrix library)))
+
+If you're building production systems that rely on external services,
+you may want to consider wrapping HTTP calls in Netflix's
+https://github.com/Netflix/Hystrix[Hystrix] library to make your
+application more fault-tolerant and resilient. Hystrix provides
+http://bit.ly/hystrix-clj[Clojure
+bindings] that you can use to wrap network calls and more easily
+manage complex failure scenarios involving external services.
+
+==== See Also
+
+* ++clj-http++'s https://github.com/dakrone/clj-http[GitHub
+  repository].
+* For information on making asynchronous HTTP calls, see
+  <<sec_async_http>>.
+* When building production systems that interact with external
+  services, consider https://github.com/Netflix/Hystrix[Hystrix] and
+  its
+  http://bit.ly/hystrix-clj[Clojure
+  bindings] to wrangle complex failure scenarios.

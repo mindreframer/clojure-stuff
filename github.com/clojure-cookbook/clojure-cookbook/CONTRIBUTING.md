@@ -1,16 +1,6 @@
 # Contributing to Clojure Cookbook
 
----
-
-**NOTE: As of 2013-10-11 we are *not* soliciting any new recipe submissions. At this point Luke and I are editing the book for publication.**
-
-We will begin accepting whole recipes again in the middle of December once we have shipped a completed manuscript to O'Reilly.
-
----
-
 Our goal with *Clojure Cookbook* is to build the best possible cookbook, chock full of excellent Clojure recipes. To do this we need the help of the whole community. From typos and factual corrections, to ideas for recipes, to whole recipes themselves, your experience is what we need to build the best *Clojure Cookbook*.
-
-This document describes how you can contribute and what you'll receive if you do.
 
 ## Valuable Contributions
 
@@ -22,20 +12,6 @@ Nearly any knowledge or bit of information you could contribute to the cookbook 
 * Write a recipe yourself (find more details in the [Recipes](#recipes) section below.)
 
 *Major contributions such as a whole recipe require you to [license](#licensing) your submission. However, you can submit pull requests for typos, factual corrections and ideas without one*
-
-## Credits & Rewards
-
-Any contribution, big or small, will net you a digital copy of the book and your name and GitHub handle immortalized in a contributors list in the book (think of the glory it will bring your family).
-
-On a legal note, we're obligated to let you know that the above mentioned rewards will be a contributors sole consideration for their contributions. (That, of course, and our ever-lasting love :wink:.)
-
-### Write a recipe
-
-Contributors who write a full (or substantial portion) of a recipe will be listed as an author of that recipe.
-
-### Write 5+ recipes
-
-Make a substantial contribution to the book (five or more recipes) and we will send you a signed physical copy of the book once it hits the presses.
 
 ## Recipes
 
@@ -142,23 +118,3 @@ If you have any questions or concerns about the licensing model, please don't he
 ### Ideas
 
 You'll find a list of ideas under the [ideas tag](../../issues?labels=idea&milestone=&page=1&state=open) of our GitHub Issues page. Feel free to submit your own ideas with a title like: `Idea: recipe covering http-kit` or `Idea: Creating a leiningen plugin`.
-
-To get you started, here is a rough list of the chapters we hope to cover in the final book:
-
-Chapter                   | Description
-------------------------- | ------------------------------------------------------------------------
-Primitive Data            | strings, numbers, dates, etc.
-Composite Data            | plural data and the manipulation thereof
-Databases and Persistence | this one's all remembering things.
-Local I/O                 | reading/writing to the console, files and other fun system calls.
-Network I/O               | communication via web requests, socket connections or otherwise.
-Distributed Computing     | performing work across multiple machines or processes.
-GUI applications          | building desktop/mobile software.
-Packaging and Deployment  | "shipping it," so to speak. Also leiningen project-management goodness.
-Testing and Profiling     | How to make it right *and* tight.
-Web Applications          | Building web applications
-ClojureScript             | Clojure in the browser
-
-This is by no means a final list, but it should serve to give a general idea the shape of the book.
-
-[![Bitdeli Badge](https://d2weczhvl823v0.cloudfront.net/clojure-cookbook/clojure-cookbook/trend.png)](https://bitdeli.com/free "Bitdeli Badge")

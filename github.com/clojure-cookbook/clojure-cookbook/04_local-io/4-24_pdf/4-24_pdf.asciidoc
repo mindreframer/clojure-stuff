@@ -1,0 +1,197 @@
+[[sec_local_io_pdf]]
+=== Generating PDF Files
+[role="byline"]
+by Dmitri Sotnikov
+
+==== Problem
+
+You need to generate a PDF from some data.(((files, PDF data)))((("I/O (input/output) streams", "PDF files")))((("PDF (Portable Document Format)")))(((clj-pdf library)))
+
+For example, you have a sequence of maps, such as those returned by a
++clojure.java.jdbc+ query, and you need to generate a PDF report.
+
+==== Solution
+
+Use the +clj-pdf+ library to create the report.
+
+Before starting, add `[clj-pdf "1.11.6"]` to your project's
+dependencies or start a REPL using +lein-try+:
+
+[source,shell-session]
+----
+$ lein try clj-pdf
+----
+
+For the purpose of illustration, imagine we want to render a vector
+containing the following employee records:
+
+[source, clojure]
+----
+(def employees
+ [{:country "Germany",
+   :place "Nuremberg",
+   :occupation "Engineer",
+   :name "Neil Chetty"}
+  {:country "Germany",
+   :place "Ulm",
+   :occupation "Engineer",
+   :name "Vera Ellison"}])
+----
+
+Create a template for rendering each record using the
++clj-pdf.core/template+ macro:
+
+[source, clojure]
+----
+(require '[clj-pdf.core :as pdf])
+
+(def employee-template
+ (pdf/template
+   [:paragraph
+    [:heading (.toUpperCase $name)]
+    [:chunk {:style :bold} "occupation: "] $occupation "\n"
+    [:chunk {:style :bold} "place: "] $place "\n"
+    [:chunk {:style :bold} "country: "] $country
+    [:spacer]]))
+
+(employee-template employees)
+;; -> ([:paragraph [:heading "NEIL CHETTY"]
+;;      [:chunk {:style :bold} "occupation: "] "Engineer" "\n"
+;;      [:chunk {:style :bold} "place: "] "Nuremberg" "\n"
+;;      [:chunk {:style :bold} "country: "] "Germany" [:spacer]]
+;;     [:paragraph [:heading "VERA ELLISON"]
+;;      [:chunk {:style :bold} "occupation: "] "Engineer" "\n"
+;;      [:chunk {:style :bold} "place: "] "Ulm" "\n"
+;;      [:chunk {:style :bold} "country: "] "Germany"
+;;      [:spacer]])
+----
+
+Use +clj-pdf.core/pdf+ to create the PDF using the template and data
+from above:
+
+[source, clojure]
+----
+(pdf/pdf [{:title "Employee Table"}
+          (employee-template employees)]
+         "employees.pdf")
+----
+
+You'll find an _employees.pdf_ file in the directory where you ran your
+project/REPL--it looks something like <<fig_employees_pdf>>.
+
+[[fig_employees_pdf]]
+._employees.pdf_
+image::images/clcb_0401.png["Contents of the employees.pdf file"]
+
+==== Discussion
+
+
+The +clj-pdf+ library is built on top of the iText and JFreeChart
+libraries. The templating syntax is inspired by the popular Hiccup
+HTML templating engine.(((iText library)))(((JFreeChart library)))(((Hiccup library)))(((HTML templates)))(((templates)))(((HTML templates, Hiccup)))
+
+In a template, +$+ is used to indicate places where dynamic content
+will be substituted. When populating a template from a map, each
+substitution anchor (+$name+) is populated with the value of the
+corresponding keyword key in the map (the value of the +:name+ key).
+
+Beyond substituting simple values, it is also possible to perform
+further processing on those values. The +:heading+ portion of the
++employee-template+ does precisely this by calling +(.toUpperCase
+$name)+. In +clj-pdf+, a document is represented by a vector containing a map of
+metadata followed by the content. The content can in turn consist of
+strings, vectors, or collections of vectors.
+
+.A _very_ simple PDF:
+[source, clojure]
+----
+(pdf/pdf [{:title "Hello World"} "Hello, World."] "hello-world.pdf")
+----
+
+Under the hood, collections of content are automatically expanded:
+
+[source, clojure]
+----
+;; This *collection* of paragraphs...
+(pdf [{} [[:paragraph "foo"] [:paragraph "bar"]]] "document.pdf")
+
+;; is equivalent to these *individual* paragraphs
+(pdf [{} [:paragraph "foo"] [:paragraph "bar"]] "document.pdf")
+----
+
+Apart from plain strings, each content element is represented as a
+vector. The first element of this vector is a keyword type, and
+everything that follows is the content itself. Some types +clj-pdf+
+includes are +:paragraph+, +:phrase+, +:list+, and +:table+:
+
+[source, clojure]
+----
+[:heading "Lorem Ipsum"]
+[:line]
+[:list "first item"
+      "second item" 
+      "third item"]
+[:paragraph "I'm a paragraph"]
+[:phrase "some text here"]
+[:table  
+   ["foo" "bar" "baz"] 
+   ["foo1" "bar1" "baz1"] 
+   ["foo2" "bar2" "baz2"]]
+----
+
+Some elements accept optional styling metadata. You can provide this
+style information as a map immediately following the type parameter
+(the second item in the vector):
+
+[source, clojure]
+----
+[:paragraph {:style :bold} "this text is bold"]
+
+[:chunk {:style :bold
+         :size 18
+         :family :helvetica
+         :color [0 234 123]}
+ "some large green text"]
+----
+
+The contents of an element can consist of other elements (like an HTML
+document), and any style applied to a parent element will be
+inherited by the child elements:
+
+[source, clojure]
+----
+[:paragraph "some content"]
+
+[:paragraph {:style :bold}
+ "Some bold text"
+ [:phrase [:chunk "even more"] "bold text"]]
+----
+
+As with Cascading Style Sheets (CSS), child elements can augment or override their parents' styles
+by specifying their own styles:
+
+[source, clojure]
+---- 
+[:paragraph
+ {:style :bold}
+ "Bold words"
+ [:phrase {:color [0 255 221]} "Bold AND teal!"]]
+----
+
+Images can be embedded in the document using the +:image+ element.
+Image content can be one of +java.net.URL+, +java.awt.Image+, a byte
+array, a Base64 string, or a string representing a URL or a file:
+
+[source, clojure]
+----
+[:image "my-image.jpg"]
+[:image "http://clojure.org/space/showimage/clojure-icon.gif"]
+----
+
+Images
+larger than the page margins will automatically be scaled to fit.
+
+==== See Also
+
+* For more information on using +clj-pdf+, including a complete list of
+  element types and charting capabilities, see the +clj-pdf+ https://github.com/yogthos/clj-pdf[GitHub repository]

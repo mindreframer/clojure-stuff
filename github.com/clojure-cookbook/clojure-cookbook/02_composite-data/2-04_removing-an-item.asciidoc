@@ -1,0 +1,58 @@
+[[sec_removing_an_item_list]]
+=== "Removing" an Item from a List
+[role="byline"]
+by Luke VanderHart
+
+==== Problem
+
+You want to obtain a list without a particular item in it, removing
+an item from the original list.(((lists, removing items from)))
+
+==== Solution
+
+Removing the first item from a list is easily accomplished using one(((functions, rest)))(((functions, pop)))
+of two functions, +rest+ or +pop+. Both work identically when used on
+a nonempty list:
+
+[source,clojure]
+----
+(pop '(1 2 3))
+;; -> (2 3)
+
+(rest '(1 2 3))
+;; -> (2 3)
+----
+
+==== Discussion
+
++rest+ is actually a sequence function, used to obtain the tail of a
+sequence. Since Clojure lists implement the sequence interface
+directly, using +rest+ on a list will always return another (possibly
+empty) list.
+
++pop+ is similar to +conj+ in that it operates on concrete data
+structures rather than the sequence interface. Like +conj+, it is
+polymorphic; also like +conj+, the position it removes the item
+from depends on what's most efficient for the concrete type.
+
+When used on an empty list, the behavior does differ; +pop+ will throw
+an exception, while +rest+ will return an empty list:
+
+[source,clojure]
+----
+(pop '())
+;; -> IllegalStateException Can't pop empty list ...
+
+(rest '())
+;; -> ()
+----
+
+Lists do not support removing items except at the first position. If
+you need to remove an item in the middle or at the end of a list,
+you'll have to do so using the sequence manipulation functions, then
+convert the result back into a concrete list (if you absolutely need
+it to be a list, for some reason).
+
+==== See Also
+
+* <<sec_composite_removing_an_item_from_vector>>

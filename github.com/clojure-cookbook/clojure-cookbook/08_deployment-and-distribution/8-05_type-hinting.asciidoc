@@ -1,0 +1,147 @@
+[[sec_primitives_math_type_hinting]]
+=== Alleviating Performance Problems with Type Hinting
+[role="byline"]
+by Ryan Neufeld
+
+==== Problem
+
+You have functions that get called very often, and you want to optimize performance for those methods.((("performance/production", "type hinting")))(((type hinting)))(((reflection)))
+
+==== Solution
+
+One of the easiest ways to increase performance for a given function
+is to eliminate Java reflection. Enable +warn-on-reflection+ to
+diagnose excessive reflection:
+
+[source,clojure]
+----
+(defn column-idx
+  "Return the index number of a column in a CSV header row"
+  [header-cols col]
+  (.indexOf (vec header-cols) col))
+
+(def headers (clojure.string/split "A,B,C" #","))
+(column-idx headers "B")
+;; -> 1
+
+(set! *warn-on-reflection* true)
+
+(defn column-idx
+  "Return the index number of a column in a CSV header row"
+  [header-cols col]
+  (.indexOf (vec header-cols) col))
+;; Reflection warning, NO_SOURCE_PATH:1:1 - call to indexOf can't be resolved.
+
+;; 100,000 non-hinted executions...
+(time (dotimes [_ 100000] (column-idx headers "B")))
+;; "Elapsed time: 329.258 msecs"
+----
+
+Once you've identified reflection, add type hints to your argument
+list preceding each argument in the form +<^Type> <arg>+:
+
+[source,clojure]
+----
+(defn column-idx
+  "Return the index number of a column in a CSV header row"
+  [^java.util.List header-cols col]
+  (.indexOf header-cols col))
+
+;; 100,000 properly hinted executions
+(time (dotimes [_ 100000] (column-idx headers "B")))
+;; "Elapsed time: 27.779 msecs"
+----
+
+When you have groups of functions that interact together, you may see
+reflection warnings in spite of your properly hinted arguments.(((exceptions/errors, reflection warnings)))
+Add type hints to the argument list itself to hint the types of the
+functions' return values:
+
+[source,clojure]
+----
+;; As a simple example, imagine you want to compare the result
+;; of two function calls
+
+(defn some-calculation [x] 42)
+
+(defn same-calc? [x y] (.equals (some-calculation x)
+                                (some-calculation y)))
+;; Reflection warning, NO_SOURCE_PATH:1:24 - call to equals can't be resolved.
+
+;; Now type-hint the return value of some-calculation
+(defn some-calculation ^Integer [x] 42)
+
+(defn same-calc? [x y] (.equals (some-calculation x)
+                                (some-calculation y)))
+
+;; Look Ma, no reflection warnings!
+----
+
+==== Discussion
+
+In highly performant code, it is often the case that you'll choose to
+fall back to Java for increased performance. There is an impedance
+mismatch between Clojure and Java, however; Java is strongly typed,
+whereas Clojure is not. Because of this, (almost) every time you
+invoke a Java function in Clojure, it needs to reflect on the type of
+the provided arguments in order to select the appropriate Java method
+to invoke. For seldom-invoked methods, this isn't too big of a deal,
+but for methods executed frequently, the cost of reflection can pile up
+quickly.
+
+Type hinting short-circuits this reflection. If you've hinted _all_ of
+the arguments to a Java function, the Clojure compiler will no longer
+perform reflection. Instead, the function application will directly
+invoke the appropriate Java function. Of course, if you've gotten your
+types wrong, your methods may not work properly; improperly hinted
+functions may throw a type-cast exception.
+
+pass:[<?dbhtml orphans="4"?>]What about when you have a sequence of values, all of a uniform type? Clojure
+provides a number of special hints for these cases, namely `^`++ints++, `^`++floats++,
+`^`++longs++, and `^`++doubles++. Hinting these types will allow you to pass
+whole arrays as arguments to Java functions and not provoke reflection
+for sequences.
+
+.Unchecked Math
+****
+You may have noticed Clojure puts training wheels on all of its(((unchecked math)))(((numeric types, unchecked math)))
+numeric types too, upgrading types liberally to avoid overflows. This
+isn't without a cost, of course, as Clojure needs to check on every
+operation to make sure you aren't overflowing containers. If you need
+even more to-the-metal performance and happen to have nerves of steel
+yourself, then you may want to look at _unchecked math_.footnote:[To
+accurately measure performance improvements from +unchecked-math+, we
+suggest using a tool like
+https://github.com/hugoduncan/criterium[Criterium]. Benchmarking
+code with +time+ can be tricky and often yields misleading results (or none
+at all).]
+
+Setting +unchecked-math+ to +true+ will disable this safety, causing
+addition, subtraction, multiplication, division, and +inc+/+dec+ to
+occur without overflow checks. This in effect reverts numeric behavior
+to a C-like state where it is possible to overflow a positive integer
+to a negative one:
+
+[source,clojure]
+----
+;; With checked math, you cannot overflow an integer
+(inc Long/MAX_VALUE)
+;; ArithmeticException integer overflow  ...
+
+(set! *unchecked-math* true)
+
+;; Now integers are free to overflow
+(inc Long/MAX_VALUE)
+;; -> -9223372036854775808
+----
+
++unchecked-math+ isn't absolute, however; it is possible for boxed
+types to sneak into your operation, forcing checked math to occur.
+Combine +unchecked-math+ with type hinting to ensure your math is
+truly unchecked--at your own risk, of course!
+****
+
+==== See Also
+
+* <<ch_primitive_data>>
+* <<sec_deployment_primitive_arrays>>

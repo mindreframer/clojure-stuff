@@ -1,0 +1,64 @@
+[[ch_local_io]]
+== Local I/O
+
+include::4-00_introduction.asciidoc[]
+
+// Console
+
+include::4-01_writing-to-stdout-and-stderr.asciidoc[]
+
+include::4-02_read-unbuffered-keystroke.asciidoc[]
+
+include::4-03_exec-system-command.asciidoc[]
+
+// Files
+
+include::4-04_get-local-resource.asciidoc[]
+
+include::4-05_copy-file.asciidoc[]
+
+include::4-06_delete-file.asciidoc[]
+
+include::4-07_get-files-from-directory/4-07_get-files-from-directory.asciidoc[]
+
+include::4-08_memory-map-files.asciidoc[]
+
+include::4-09_read-write-files.asciidoc[]
+
+include::4-10_using-temp-files.asciidoc[]
+
+include::4-11_random-access-files.asciidoc[]
+
+include::4-12_parallelizing-file-processing.asciidoc[]
+
+include::4-13_parallelizing-file-processing-using-iota.asciidoc[]
+
+// Clojure data + edn
+
+include::4-14_read-write-clojure-data-structures.asciidoc[]
+
+include::4-15_edn-config.asciidoc[]
+
+include::4-16_edn-record.asciidoc[]
+
+include::4-17_unknown-reader-literals.asciidoc[]
+
+// Specific Formats
+
+include::4-18_read-property-file.asciidoc[]
+
+include::4-19_handle-binary-files.asciidoc[]
+
+include::4-20_read-write-csv.asciidoc[]
+
+include::4-21_read-write-gzip.asciidoc[]
+
+include::4-22_read-write-xml.asciidoc[]
+
+include::4-23_read-write-json.asciidoc[]
+
+include::4-24_pdf/4-24_pdf.asciidoc[]
+
+// GUI
+
+include::4-25_seesaw/4-25_making-a-window.asciidoc[]

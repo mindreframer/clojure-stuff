@@ -1,0 +1,110 @@
+[[sec_local-io_read_write_files]]
+=== Reading and Writing Text Files
+[role="byline"]
+by Stefan Karlsson
+
+==== Problem
+
+You need to read or write a text file to the local filesystem.((("I/O (input/output) streams", "reading/writing text files")))(((files, reading/writing text files)))(((text files, reading/writing)))(((functions, spit)))(((functions, slurp)))
+
+==== Solution
+
+Write a string to a file with the built-in +spit+ function:
+
+[source,clojure]
+----
+(spit "stuff.txt" "my stuff")
+----
+
+Read the contents of a file with the built-in +slurp+ function:
+
+[source,clojure]
+----
+(slurp "stuff.txt")
+;; -> "all my stuff"
+----
+
+If required, an encoding can be specified with the +:encoding+ option:
+
+[source,clojure]
+----
+(slurp "stuff.txt" :encoding "UTF-8")
+;; -> "all my stuff"
+----
+
+Append data to an existing file using the +:append true+ option to +spit+:
+
+[source,clojure]
+----
+(spit "stuff.txt" "even more stuff" :append true)
+----
+
+To read a file line by line, instead of loading the entire contents
+into memory at once, use a +java.io.Reader+ together with the +line-seq+ function:
+
+[source,clojure]
+----
+(with-open [r (clojure.java.io/reader "stuff.txt")]
+  (doseq [line (line-seq r)]
+    (println line)))
+----
+
+To write a large amount of data to a file without realizing it all as
+a string, use a +java.io.Writer+:
+
+[source,clojure]
+----
+(with-open [w (clojure.java.io/writer "stuff.txt")]
+  (doseq [line some-large-seq-of-strings]
+    (.write w line)
+    (.newLine w)))
+----
+
+==== Discussion
+
+When using +:append+, text will be appended to the end of the
+file. Use newlines at the end of each line by appending +"\n"+ to the
+string to be printed. All lines in a text file should end with a
+newline, including the last one:
+
+[source,clojure]
+----
+(defn spitn
+  "Append to file with newline"
+  [path text]
+  (spit path (str text "\n") :append true)
+----
+
+When used with strings, +spit+ and +slurp+ deal with the entire
+contents of a file at a time and close the file after reading or
+writing. If you need to read or write a lot of data, it is more
+efficient (in terms of both memory and time) to use a streaming API
+such as +java.io.Reader+ or +java.io.Writer+, since they do not
+require realizing the contents of the file in memory.
+
+When using writers and streams, however, it is important to flush any
+writes to the underlying stream in order to ensure your data is
+actually written and resources are cleaned up. The +with-open+ macro
+flushes and closes the stream specified in its binding after executing
+its body.
+
+WARNING: Be especially aware that any lazy sequences based on a stream
+will throw an error if the underlying stream is closed before the
+sequence is realized. Even when using +with-open+, it is possible to
+return an unrealized lazy sequence; the +with-open+ macro has no way
+of knowing that the stream is still needed and so will close it
+anyway, leaving a sequence that cannot be realized.
+
+Generally, it is best to not let lazy sequences based on streams
+escape the scope in which the stream is open. If you do, you must be
+extremely careful to ensure that the resources required for the realization of a
+lazy sequence are still open as long as the sequence has any
+readers. Typically, the latter approach involves manually tracking
+which streams are still open rather than relying on a +try/finally+ or
++with-open+ block.
+
+==== See Also
+
+* <<sec_local_io_clojure_data_to_disk>>
+* The documentation for http://bit.ly/javadoc-reader[+java.io.Reader+] and http://bit.ly/javadoc-writer[+java.io.Writer+]
+

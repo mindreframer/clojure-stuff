@@ -1,0 +1,138 @@
+=== Reading Properties from a File
+[role="byline"]
+by Tobias Bayer
+
+==== Problem
+
+You need to read a property file and access its key/value pairs.(((files, reading properties from)))((("properties, reading from files")))(((Java, java.util.Properties)))(((keys, accessing key-value pairs)))
+
+==== Solution
+
+The most straightforward way is to use the built-in
+http://bit.ly/javadoc-properties[+java.util.Properties+]
+class via Java interop. +java.util.Properties+ implements
++java.util.Map+, which can be easily consumed from Clojure, just like
+any other map.(((Java, java.util.Map)))((("I/O (input/output) streams", "accessing key-value pairs")))
+
+Here is an example property file to load, _fruitcolors.properties_:
+
+----
+banana=yellow
+grannysmith=green
+----
+
+Populating an instance of +Properties+ from a file is straightforward,
+using its +load+ method and passing in an instance of +java.io.Reader+
+obtained using the +clojure.java.io+ namespace:
+
+[source,clojure]
+----
+(require '[clojure.java.io :refer (reader)])
+
+(def props (java.util.Properties.))
+
+(.load props (reader "fruitcolors.properties"))
+;; -> nil
+
+props
+;; -> {"banana" "yellow", "grannysmith" "green"}
+----
+
+Instead of using the built-in +Properties+ API via interop, you could
+also use the +propertea+ library for simpler, more idiomatic Clojure
+access to property files.(((propertea library)))
+
+Include the `[propertea "1.2.3"]` dependency in your _project.clj_
+file, or start a REPL using +lein-try+:
+
+[source,shell-session]
+----
+$ lein try propertea 1.2.3
+----
+
+Then read the property file and access its key/value pairs:
+
+[source,clojure]
+----
+(require '[propertea.core :refer (read-properties)])
+
+(def props (read-properties "fruitcolors.properties"))
+
+props
+;; -> {:grannysmith "green", :banana "yellow"}
+
+(props :banana)
+;; -> "yellow"
+----
+
+==== Discussion
+
+Although using +java.util.Properties+ directly is more straightforward
+and doesn't require the addition of a dependency, +propertea+ does
+provide some convenience. It returns an actual immutable Clojure map,
+instead of just a +java.util.Map+. Although both are perfectly usable
+from Clojure, an immutable map is probably preferable if you intend to
+do any further manipulation or updates on it.
+
+More importantly, +propertea+ converts all string keys into keywords,
+which are more commonly used than strings as the keys of maps in
+Clojure.
+
+Additionally, +propertea+ has several other features, such as the
+capability to parse values into numbers or Booleans, and providing
+default values.
+
+By default, ++propertea++'s +read-properties+ function treats all
+property values as strings. Consider a file +other.properties+ with
+an integer and Boolean key:
+
+----
+intkey=42
+booleankey=true
+----
+
+You can force these properties to be parsed into their respective
+types by supplying lists for the +:parse-int+ and +:parse-boolean+
+options:
+
+[source,clojure]
+----
+(def props (read-properties "other.properties"
+                            :parse-int [:intkey]
+                            :parse-boolean [:booleankey]))
+
+(props :intkey)
+;; -> 42
+
+(class (props :intkey))
+;; -> java.lang.Integer
+
+(props :booleankey)
+;; -> true
+
+(class (props :booleankey))
+;; -> java.lang.Boolean
+----
+
+Sometimes the property file might not contain a key/value pair, and you might want to set a reasonable default value in this case:
+
+[source,clojure]
+----
+(def props (read-properties "other.properties" :default [:otherkey "awesome"]))
+
+(props :otherkey)
+;; -> "awesome"
+----
+
+You can also be strict on required properties. If an expected property is missing in your property file, you can throw an exception:
+
+[source,clojure]
+----
+(def props (read-properties "other.properties" :required [:otherkey]))
+;; -> java.lang.RuntimeException: (:otherkey) are required ...
+----
+
+==== See Also
+
+* The https://github.com/jaycfields/propertea[+propertea+ GitHub repository]
+* The http://bit.ly/javadoc-properties[+Properties+ API documentation]

@@ -1,0 +1,85 @@
+[[sec_local-random-access-files]]
+=== Reading and Writing Files at Arbitrary Positions
+[role="byline"]
+by John Jacobsen
+
+==== Problem
+
+You want to read data from a file, or write data to it, at various
+locations rather than sequentially.((("I/O (input/output) streams", "reading/writing non-sequentially")))(((files, reading/writing non-sequentially)))(((random access)))(((Java, RandomAccessFile)))
+
+==== Solution
+
+To open a (potentially very large) file for random access, use Java's
++RandomAccessFile+. +seek+ to the location you desire, then use
+the various +write+ methods to write data at that location.
+
+For example, to make a 1 GB file filled with zeros except the
+integer 1,234 at the end:
+
+[source,clojure]
+----
+(import '[java.io RandomAccessFile])
+
+(doto (RandomAccessFile. "/tmp/longfile" "rw")
+  (.seek (* 1000 1000 1000))
+  (.writeInt 1234)
+  (.close))
+----
+
+Getting the +length+ of a "normal" Java file object shows that the file is
+the correct size:
+
+[source,clojure]
+----
+(require '[clojure.java.io :refer [file]])
+(.length (file "/tmp/longfile"))
+
+;; -> 1000000004
+----
+
+(You can also call +length+ on a +RandomAccessFile+ directly.)
+
+Reading a value back from the proper location in Clojure is quite
+similar to writing. Again, +seek+ a +RandomAccessFile+. Then use
+the appropriate +read+ method:
+
+[source,clojure]
+----
+(let [raf (RandomAccessFile. "/tmp/longfile" "r")
+      _ (.seek raf (* 1000 1000 1000))
+      result (.readInt raf)]
+  (.close raf)
+  result)
+
+;; -> 1234
+----
+
+==== Discussion
+
+Files written in this way are populated by zeros by default and may be
+treated as "sparse files" by the JVM implementation and the underlying
+operating system, leading to extra efficiency in reading and writing.(((sparse files)))(((files, sparse files)))
+
+Examining the file we created using the Unix `od` program to do a hex dump from the
+command line shows that the file consists of zeros with our +1234+ at
+the end:
+
+[source,shell-session]
+----
+$ od -Ad -tx4 /tmp/longfile
+0000000          00000000        00000000        00000000        00000000
+*
+1000000000          d2040000
+1000000004
+----
+
+At byte offset 1000000000 can be seen the value +d2040000+, which is
+the hex representation of a big-endian integer with the value 1,234.
+(Java integers are big-endian by default. This means that the highest-order bytes are stored at the lowest addresses.)((("big-endian integers")))(((integers, big-endian)))
+
+==== See Also
+
+* <<sec_local_io_clojure_data_to_disk>>, for information on reading entire files
+* The http://bit.ly/javadoc-raf[+java.io.RandomAccessFile+] API documentation
+* The Unix http://bit.ly/wiki-od[+od+] command

@@ -1,0 +1,87 @@
+[[sec_local-io_files_get_files_from_dir]]
+=== Listing Files in a Directory
+[role="byline"]
+by Ryan Neufeld and Stefan Karlsson
+
+==== Problem
+
+Given a directory, you want to access the files inside.(((files, listing)))((("I/O (input/output) streams", "listing files")))(((Java, java.io.File)))
+
+==== Solution
+
+Call the built-in +file-seq+ function. 
+
+[NOTE]
+====
+To follow along with this recipe, create some sample files and folders
+using these commands (on Linux or Mac):
+
+[source,shell-session]
+----
+$ mkdir -p next-gen
+$ touch next-gen/picard.jpg next-gen/locutus.bmp next-gen/data.txt
+----
+====
+
++file-seq+ returns a lazy sequence(((functions, file-seq)))
+of +java.io.File+ objects:
+
+[source,clojure]
+----
+(def tng-dir (file-seq (clojure.java.io/file "./next-gen")))
+
+tng-dir
+;; -> (#<File ./next-gen>
+;;     #<File ./next-gen/picard.jpg>
+;;     #<File ./next-gen/locutus.bmp>
+;;     #<File ./next-gen/data.txt>)
+----
+
+==== Discussion
+
+Sequences are one of Clojure's more powerful abstractions; treating a
+directory hierarchy as a sequence allows you to leverage functions like
++map+ and +filter+ to manipulate files and directories.((("sequence abstraction", "listing files in directory hierarchies")))
+
+Consider, for example, the case where you would like to select only files in a
+directory hierarchy (and not directories). You can define such a function
+by taking a sequence of files and directories and filtering them by the
++.isFile+ property of +java.io.File+ objects:
+
+[source,clojure]
+----
+(defn only-files
+  "Filter a sequence of files/directories by the .isFile property of
+  java.io.File"
+  [file-s]
+  (filter #(.isFile %) file-s))
+
+(only-files tng-dir)
+;; -> (#<File ./next-gen/data.txt>
+;;     #<File ./next-gen/locutus.bmp>
+;;     #<File ./next-gen/picard.jpg>)
+----
+
+What if you want to display the string names of all those files? Define
+a +names+ function to map the +.getName+ property over a sequence of
+files, combining +only-files+ and +names+ to get a list of filenames
+in a directory:
+
+[source,clojure]
+----
+(defn names
+  "Return the .getName property of a sequence of files"
+  [file-s]
+  (map #(.getName %) file-s))
+
+(-> tng-dir
+    only-files
+    names)
+;; -> ("data.txt" "locutus.bmp" "picard.jpg")
+----
+
+==== See Also
+
+* The documentation for the http://bit.ly/javadoc-file[+File+ class] for a complete list of properties and methods available on +File+ objects.
+* Combine these techniques with utility libraries like Google Guava's http://bit.ly/guava-files[+Files+ class] or Apache Commons http://bit.ly/commons-io-filename-utils[+FilenameUtils+ class] to exert even greater leverage over the file sequence abstraction.
+

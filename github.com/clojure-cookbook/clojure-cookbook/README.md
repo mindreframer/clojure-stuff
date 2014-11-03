@@ -1,17 +1,54 @@
-# Clojure Cookbook Contribution Hub
+# Clojure Cookbook
 
-We're building a book, and we want your help!
+*Clojure Cookbook* marks Clojure's entry into O'Reilly's prestigious [Cookbook Series](http://shop.oreilly.com/category/series/cookbooks.do). The book details a large number of recipes – pairs of problems and solutions – for common topics in Clojure.
 
-*Clojure Cookbook* is set to be O'Reilly's next book in the [Cookbook Series](http://shop.oreilly.com/category/series/cookbooks.do). The book will detail a large number of Clojure recipes – pairs of problems and solutions – covering a wide number of common topics.
+*Clojure Cookbook* doesn't just teach you Clojure, it also shows you how to use the language and many of its common libraries. The most difficult part of mastering any language is knowing how to apply it, in an idiomatic way, to tasks that real software developers encounter every day. This is especially true of Clojure.
 
+With code recipes that teach you how to use the language in a variety of domains, *Clojure Cookbook* goes beyond simply teaching Clojure syntax and semantics. It contains annotated example code with detailed analysis and explanation for hundreds of real programming tasks. You can read the book straight through to gain insights about Clojure, or use it as a reference to solve particular problems.
+
+## Exploring the Book
+
+If you're an Emacs-wielding Clojurist, you will probably want to read this book in Emacs, too. Here is a function that "turns the page" from one recipe to the next (find and open the next recipe, close the buffer with the previous recipe).
+
+```elisp
+(defun increment-clojure-cookbook ()
+  "When reading the Clojure cookbook, find the next section, and
+close the buffer. If the next section is a sub-directory or in
+the next chapter, open Dired so you can find it manually."
+  (interactive)
+  (let* ((cur (buffer-name))
+	 (split-cur (split-string cur "[-_]"))
+	 (chap (car split-cur))
+	 (rec (car (cdr split-cur)))
+	 (rec-num (string-to-number rec))
+	 (next-rec-num (1+ rec-num))
+	 (next-rec-s (number-to-string next-rec-num))
+	 (next-rec (if (< next-rec-num 10)
+		       (concat "0" next-rec-s)
+		     next-rec-s))
+	 (target (file-name-completion (concat chap "-" next-rec) "")))
+    (progn 
+      (if (equal target nil)
+	  (dired (file-name-directory (buffer-file-name)))
+	(find-file target))
+      (kill-buffer cur))))
+```
+
+If you wish, you can then bind the function to a key:
+
+```elisp
+(define-key adoc-mode-map (kbd "M-+") 'increment-clojure-cookbook)
+```
+
+Of course, this binding assumes you're using adoc-mode for reading .asciidoc files. We suggest CIDER for evaluating code interactively. Adding the following hook to your config will enable cider-mode every time you enter an AsciiDoc file. Once active, you can start a REPL and evaluate code like you would do in any regular Clojure file.
+
+```elisp
+(add-hook 'adoc-mode-hook 'cider-mode)
+```
 
 ## Contributing
 
-The goal behind the *Clojure Cookbook* is to build the **best** cookbook we can. We plan to do this by leveraging the breadth of experience across the entire community. We hope the rest of the community will rise to the occasion and contribute their best Clojure recipes.
-
-Every author of an accepted contribution will receive a *free digital copy of the book* and abundant credit in the book. Authors of five or more recipes will receive a signed physical copy of the book (and major kudos!) Write a whole chapter and we might have to see if we can get your name on the cover :wink:.
-
-**No contribution is too small**. We welcome anything from typo fixes or ideas for recipes all the way to complete recipes and anything in between. You can find more information on how to contribute in our [CONTRIBUTING.md](CONTRIBUTING.md) document.
+As of Jan. 10, 2014 we are preparing the book for print. See [CONTRIBUTING.md](CONTRIBUTING.md) for more info.
 
 ## Building the Book
 
@@ -24,18 +61,12 @@ installed and properly configured.)
 You must have the `asciidoc` and `source-highlight` command-line utilities
 installed and configured before attempting to build the book.
 
-To install and configure the tools on OS X,
-run the included [`bootstrap_osx.sh`](script/asciidoc/bootstrap_osx.sh) script:
+To install and configure the tools on OS X or Linux,
+run the included [`bootstrap.sh`](script/asciidoc/bootstrap.sh) script:
 
 ```sh
-$ ./script/asciidoc/bootstrap_osx.sh
+$ ./script/asciidoc/bootstrap.sh
 ```
-
-Linux users will need to follow a similar process to
-[`bootstrap_osx.sh`](script/asciidoc/bootstrap_osx.sh), but we have not
-automated it yet. The most important part after installing `asciidoc` and
-`source-highlight` is to obtain and configure the proper bindings for Clojure
-(and other) syntax highlighting.
 
 ### Rendering
 
@@ -51,11 +82,11 @@ With installation and configuration complete, all that is left is to run the `as
 * To render the entire book:
 
     ```sh
-    $ asciidoc -b html5 clojure-cookbook.asciidoc
-    # ... outputs clojure-cookbook.html
+    $ asciidoc -b html5 book.asciidoc
+    # ... outputs book.html
     ```
 
-**NOTE**: Rendered out put is *similar* to the final book, but does not include O'Reilly style sheets.
+**NOTE**: Rendered output is *similar* to the final book, but does not include O'Reilly style sheets.
 
 ### Testing
 
@@ -110,12 +141,6 @@ should be
 Username: #<1>
 ```
 
-#### Trusted Contributors
-
-The following users are trusted contributors (push access) that have proven themselves through excellent judgement and outstanding contributions to the book. We support and strongly encourage these users to make corrections and improvements to the book at will (recipes aside.)
-
-* @jcromartie
-
 ## Who we are
 
 We are Luke Vanderhart ([@levand](http://github.com/levand)) and Ryan Neufeld ([@rkneufeld](http://github.com/rkneufeld)), developers, authors, conference speakers and (at the moment), teachers. For this book-building adventure we will be your guides; we'll be collecting and editing your contributions, interfacing with the publisher (O'Reilly) and writing a solid chunk of the book ourselves.
@@ -128,5 +153,3 @@ We are Luke Vanderhart ([@levand](http://github.com/levand)) and Ryan Neufeld ([
 Please see the [contribution guide](CONTRIBUTING.md) for how this works for accepting pull requests.
 
 Also, please note that because this is a *No Derivatives* license, you may *not* use this repository as a basis for creating your own book based on this one. Technically speaking, this book is open source in the "free as in beer" sense, rather than "free as in speech."
-
-[![Bitdeli Badge](https://d2weczhvl823v0.cloudfront.net/clojure-cookbook/clojure-cookbook/trend.png)](https://bitdeli.com/free "Bitdeli Badge")

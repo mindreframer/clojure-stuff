@@ -1,0 +1,80 @@
+[[extend_built_in]]
+=== Extending a Built-In Type
+[role="byline"]
+by David McNeil
+
+==== Problem
+
+You need to extend one of the built-in types with your own functions.(((types, extending built-in)))
+
+==== Solution
+
+Suppose you would like to add domain-specific functions to
+the core +java.lang.String+ type. In this example, you will add a
++first-name+ and a +last-name+ function to +String+.(((functions, adding domain-specific)))(((protocols, defining domain-specific)))(((Java, java.lang.String)))
+
+Define a protocol with the functions you need. The protocol declares
+the signature of the functions:
+
+[source,clojure]
+----
+(defprotocol Person
+  "Represents the name of a person."
+  (first-name [person])
+  (last-name [person]))
+----
+
+Extend the type to the +java.lang.String+ class:
+
+[source,clojure]
+----
+(extend-type String
+  Person
+  (first-name [s] (first (clojure.string/split s #" ")))
+  (last-name [s] (second (clojure.string/split s #" "))))
+----
+
+Now you can invoke your functions on strings:
+
+[source,clojure]
+----
+(first-name "john")
+;; -> "john"
+
+(last-name "john smith")
+;; -> "smith"
+----
+
+==== Discussion
+
+Why use protocols when multimethods already exist? For one, speed:
+protocols dispatch only on the type of their first parameter. Further,
+protocols allow you to group and name an extension. This makes it much
+easier to reason about what a group of functions confer about a type
+and ensures a proper, full implementation.(((multimethods)))(((protocols, vs. multimethods)))
+
+It is good practice to only extend a protocol to a type if you are the
+author of either the protocol or the type. This will avoid cases where
+you violate the assumptions of the original author(s).
+
+If you already had functions to use, then it would make sense to use
++extend+ instead of the +extend-type+ form:
+
+[source,clojure]
+----
+(defn first-word [s]
+  (first (clojure.string/split s #" ")))
+
+(defn second-word [s]
+  (second (clojure.string/split s #" ")))
+
+(extend String
+  Person
+  {:first-name first-word
+   :last-name second-word})
+----
+
+==== See Also
+
+* An excellent http://bit.ly/protocols-explanation[explanation] of why
+  protocols exist as it relates to the "Expression Problem" by Jörg W Mittag on StackOverflow

@@ -1,0 +1,93 @@
+[[sec_retrieving_multiple_keys]]
+=== Retrieving Multiple Keys from a Map Simultaneously
+[role="byline"]
+by Leonardo Borges
+
+==== Problem
+
+You want to retrieve multiple values from a map at one time.(((maps, retrieving multiple values)))(((values, retrieving multiple from maps)))(((keys, retrieving values simultaneously)))(((functions, vals)))(((functions, select-keys)))
+
+==== Solution
+
+Use +vals+ and +select-keys+ when the order of returned values is not
+important:
+
+[source,clojure]
+----
+;; How many red and green beans are there?
+(def beans {:red 10
+            :blue 3
+            :green 1})
+
+(reduce + (vals (select-keys beans [:red :green])))
+;; -> 11
+----
+
+Use +juxt+ when order matters:
+
+[source,clojure]
+----
+;; What are the red and green bean totals?
+((juxt :red :green) beans)
+;; -> [10 1]
+----
+
+==== Discussion
+
++juxt+ and the combination of +vals+ and +select-keys+ are both apt
+tools for retrieving multiple keys from a map. There are subtleties to
+their behavior that are important to understand, though.(((functions, juxt))) 
+
+At first glance, the +juxt+ approach seems to be the clear winner of
+the two. However, it only goes so far: the approach falls
+apart when any of the keys you wish to retrieve is not a keyword (more
+specifically, not a _function_). This is because +juxt+ merely
+_juxtaposes_ the return values of multiple functions. Since keywords
+are functions, it's possible to +juxt+ them and retrieve a
+strongly ordered list of values.
+
+If the keys in the +beans+ map were strings, it would not be possible
+to retrieve their values with +juxt+:
+
+[source,clojure]
+----
+((juxt "a" "b") beans)
+;; -> ClassCastException java.lang.String cannot be cast to clojure.lang.IFn ...
+----
+
++select-keys+, on the other hand, _is_ capable of pulling values for(((functions, select-keys)))
+any number of arbitrary keys. The +select-keys+ function takes a map
+and a sequence of keys and returns a new map populated with _only_ those
+keys:
+
+[source,clojure]
+----
+(def weird-map {"a" 1, {:foo :bar} :baz, 13 31})
+
+(select-keys weird-map
+             ["a" {:foo :bar}])
+;; -> {{:foo :bar} :baz, "a" 1}
+
+(vals {{:foo :bar} :baz, "a" 1})
+;; -> (1 :baz)
+----
+
+In cases where you're pulling multiple values from nonkeyword maps, it is probably
+easiest to wrap that interaction up via +juxt+:
+
+[source,clojure]
+----
+(def a-str-then-foo-bar-map
+  (juxt #(get % "a")
+        #(get % {:foo :bar})))
+
+(a-str-then-foo-bar-map weird-map)
+;; -> [1 :baz]
+----
+
+You'll avoid weird maps now, won't you?
+
+==== See Also
+
+* <<sec_composite_retrieving_keys_map>>
+* <<sec_composites_as_keys>>

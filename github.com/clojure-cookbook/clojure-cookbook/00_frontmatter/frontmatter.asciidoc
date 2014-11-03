@@ -1,0 +1,343 @@
+[preface]
+
+== Preface
+
+The primary goal of this book is to provide mid-length examples of
+Clojure code that go beyond the basics, with a focus on real-world,
+everyday applications (as opposed to more conceptual or academic
+issues).
+
+Unlike many of the other books on Clojure written to date, the
+organizing theme of this book is not the language itself, or its
+features and capabilities. Instead, it focuses on specific _tasks_
+that developers face (regardless of what language they're using) and
+shows an example of how to use Clojure to solve each of those specific
+problems.
+
+As such, this book is not and cannot be truly comprehensive; there are
+infinite possible example problems. However, we do hope we've
+documented some of the more common ones that most programmers
+encounter frequently, and that by induction readers will be able to
+learn some common patterns, approaches, and techniques that will serve
+them well as they design solutions for their own unique problems.
+
+=== How This Book Was Written
+
+An important thing you should understand about this book is
+that it is, first and foremost, a group effort. It is not authored by
+one or two people. It isn't even the work of a single, well-defined
+group. Instead, it is the collaborative product of more than 60 of the
+best Clojurists from all over the world, from all backgrounds. These
+authors use Clojure every day on real applications, ranging from
+aerospace to social media, banking to robotics, AI research to
+e-commerce.
+
+As such, you will see a lot of diversity in the recipes
+presented. Some are quick and to the point.  Others are more deliberate, presenting digestible yet
+penetrating insights into the philosophy and implementation of certain
+aspects of Clojure.
+
+We hope that there is something in this book for readers of diverse
+interests. We believe that it will be useful not only as a reference
+for looking up solutions to specific problems, but also as a worthwhile survey of the
+variety and expressivity that Clojure is capable of. As we edited
+submissions, we were astonished by the number of concepts and
+techniques that were new to us, and will hopefully be new to our
+readers as well.
+
+Something else that we discovered while writing and editing was how
+difficult it was to draw a circumference around what we wanted to
+cover. Every single recipe is a beautiful, endless fractal, touching
+multiple topics, each of which deserves a recipe, a chapter, or a book
+of its own. But each recipe also needs to stand on its own. Each one
+should provide some useful nugget of information that readers can
+understand and take away with them.
+
+We sincerely hope that we have balanced these goals appropriately, and
+that you find this book useful without being tedious, and insightful
+without being pedantic.
+
+=== Audience
+
+Anyone who uses Clojure will, we hope, be able to get something out of
+this book. There are a lot of recipes on truly basic things that
+beginners will find useful, but there are also many recipes on
+more specialized topics that advanced users should find useful for
+getting a head start on implementation.
+
+That said, if you're completely new to Clojure, this probably isn't
+the book to start with--at least, not by itself. It covers a great
+many useful topics, but not as methodically or as thoroughly as a good
+introductory text. See the following section for a list
+of general Clojure books you may find useful as prior or supplemental
+texts.
+
+=== Other Resources
+
+One thing that this book is not, and could never be, is
+complete. There is too much to cover, and by presenting information in
+a task-oriented recipe format we have inherently precluded ourselves
+from methodical, narrative explanation of the features and
+capabilities of the whole language.
+
+For a more linear, thorough explanation of Clojure and its features,
+we recommend one of the following books: 
+
+- pass:[<emphasis><ulink role="orm:hideurl" url="http://shop.oreilly.com/product/0636920013754.do">Clojure Programming</ulink></emphasis>] (O'Reilly, 2012), by Chas Emerick, Brian Carper,
+  and Christophe Grand. A good, comprehensive, general-purpose Clojure
+  book focusing on the language and common tasks, oriented toward
+  beginner Clojure programmers.
+
+- _Programming Clojure_, 2nd ed. (Pragmatic Bookshelf, 2012), by Stuart
+  Halloway and Aaron Bedra. The first book on Clojure, this is a
+  clear, comprehensive introductory tutorial on the Clojure language.
+
+- _Practical Clojure_ (Apress, 2010), by Luke VanderHart and Stuart
+  Sierra. This is a terse, no-nonsense explanation of what Clojure is
+  and what its features do.
+
+- _The Joy of Clojure_ (Manning, 2011), by Michael Fogus and Chris
+  Houser. This is a slightly more advanced text that really digs into the
+  themes and philosophies of Clojure.
+
+- pass:[<emphasis><ulink role="orm:hideurl" url="http://shop.oreilly.com/product/0636920025139.do">ClojureScript: Up and Running</ulink></emphasis>] (O'Reilly, 2012), by Stuart Sierra
+  and Luke VanderHart. While _Clojure Cookbook_ and the other
+  Clojure books listed here focus mainly or entirely on Clojure
+  itself, ClojureScript (a dialect of Clojure that compiles to
+  JavaScript) has gained considerable uptake. This book introduces
+  ClojureScript and how to get started with it, and covers the
+  similarities and differences between ClojureScript and Clojure.
+
+Finally, you should look at the source code for this book itself,
+which is freely available on http://bit.ly/clj-ckbk[GitHub]. The selection
+of recipes available online is larger than that in the print version,
+and we are still accepting pull requests for new recipes that might
+someday make it into a future edition of this book.
+
+=== Structure
+
+The chapters in this book are for the most part groupings of recipes
+by theme, rather than strictly categorical. It is entirely possible for
+a recipe to be applicable to more than one chapter--in these cases,
+we have simply tried to place it where we think the majority of
+readers will likely look first.
+
+A _recipe_ consists of three primary parts and one secondary: problem,
+solution, discussion, and "see also." A recipe's problem statement lays out a task or obstacle to be overcome. Its solution tackles the problem
+head-on, illustrating a particular technique or library that
+effectively accomplishes the task. The discussion rounds everything
+out, exploring the solution and any caveats that may come with it.
+Finally, we tie off each recipe with a "see also" section, pointing
+you, the reader, to any additional resources or recipes that will
+assist you in enacting the described solution.
+
+==== Chapter Listing
+
+The book is composed of the following chapters:
+
+++++
+<remark>
+Cross reference links like ch_primitive_data used to
+include a descriptive title like "Primitive Data Chapter on Pg. X",
+but now they just say "Chapter 1" or "Recipe 1.2".
+
+We really need to get this descriptive text back, or we will need to
+do a pass over the book adding our own.
+</remark>
+++++
+
+* <<ch_primitive_data>>, and <<ch_composite_data>>, cover Clojure's
+built-in primitive and composite data structures, and explain many
+common (and less common) ways one might want to use them.
+
+* <<ch_general_computing>>, is a grab bag of useful topics that are
+generally applicable in many different application areas and project
+domains, from Clojure features such as Protocols to alternate
+programming paradigms such as logic programming with +core.logic+ or
+asynchronous coordination with +core.async+.
+
+* <<ch_local_io>>, deals with all the ways in which your program can
+interact with the local computer upon which it is running. This
+includes reading fromand writing to standard input and output streams,
+creating and manipulating files, serializing and deserializing files,
+etc.
+
+* <<ch_network_io>>, contains recipes with similar themes to
+<<ch_local_io>>, but instead deals with _remote_ communication over a
+network. It includes recipes on a variety of network communication
+protocols and libraries.
+
+* <<ch_databases>>, demonstrates techniques and tools for connecting to
+and using a variety of databases. Special attention is given to
+Datomic, a datastore that shares and extends much of Clojure's
+underlying philosophy of value, state, and identity to persistent
+storage.
+
+* <<ch_webapps>>, dives in-depth into one of the most common applications
+for Clojure: building and maintaining dynamic websites. It provides
+comprehensive treatment of Ring (the most popular HTTP server library
+for Clojure), as well as tools for HTML templating and rendering.
+
+* <<ch_deployment_and_distribution>>, explains what to do with a Clojure
+program once you have one, going over common patterns for packaging,
+distributing, profiling, logging, and associated ongoing tasks over
+the lifetime of an application.
+
+* <<ch_distributed>>, focuses on cloud computing and
+using Clojure for heavyweight distributed data crunching. Special
+attention is given to Cascalog, a declarative Clojure interface to the
+Hadoop MapReduce framework.
+
+* Last but not least, <<ch_testing>>, covers a variety of techniques for
+ensuring the integrity and correctness of your code and data, ranging
+from traditional unit and integration tests to more comprehensive
+generative and simulation testing, and even optional compile-time
+validations using static typing with +core.typed+.
+
+=== Software Prerequisites
+
+To follow along with the recipes in this book you will need valid
+installations of the Java Development Kit (JDK) and Clojure's de facto
+build tool, Leiningen. We recommend version 7 of the JDK, but a
+minimum of 6 will do. For Leiningen, you should have at least
+version 2.2.
+
+If you don't have Java installed (or would like to upgrade), visit
+http://bit.ly/java-download[the Java Download Page] for
+instructions on downloading and installing the Java JDK.
+
+To install Leiningen, follow the installation instructions on http://leiningen.org/[Leiningen's website]. If you already have
+Leiningen installed, get the latest version by executing the command
+*+lein upgrade+*. If you aren't familiar with Leiningen, visit the
+http://bit.ly/lein-tutorial[tutorial]
+to learn more.
+
+The one thing you _won't_ need to manually install is Clojure itself;
+Leiningen will do this for you on an ad hoc basis. To verify your
+installation, run *+lein repl+* and check your Clojure version:
+
+[source,shell-session]
+----
+$ lein repl
+# ...
+user=> *clojure-version*
+{:major 1, :minor 5, :incremental 1, :qualifier nil}
+----
+
+[NOTE]
+====
+Some recipes have accompanying online materials available on GitHub.
+If you do not have Git installed on your system, follow https://help.github.com/articles/set-up-git[the setup instructions] to
+enable you to check out a GitHub repository locally.
+====
+
+Some recipes--such as the database recipes--require further software
+installations. Where this is the case, recipes will include additional
+information on installing those tools.
+
+include::conventions.asciidoc[]
+
+=== Using Code Examples
+
+Supplemental material (code examples, exercises, etc.) is available
+for download at
+link:$$http://bit.ly/clj-ckbk$$[].
+
+This book is here to help you get your job done. In general, if
+example code is offered with this book, you may use it in your
+programs and documentation. You do not need to contact us for
+permission unless you’re reproducing a significant portion of the
+code. For example, writing a program that uses several chunks of code
+from this book does not require permission. Selling or distributing a
+CD-ROM of examples from O’Reilly books does require permission.
+Answering a question by citing this book and quoting example code does
+not require permission. Incorporating a significant amount of example
+code from this book into your product’s documentation does require
+permission.
+
+We appreciate, but do not require, attribution. An attribution usually
+includes the title, author, publisher, and ISBN. For example:
+“_Clojure Cookbook_ by Luke VanderHart and Ryan Neufeld (O’Reilly).
+Copyright 2014 Cognitect, Inc., 978-1-449-36617-9.”
+
+If you feel your use of code examples falls outside fair use or the
+permission given above, feel free to contact us at
+pass:[<email>permissions@oreilly.com</email>].
+
+=== Safari® Books Online
+
+[role = "safarienabled"]
+[NOTE]
+====
+pass:[<ulink role="orm:hideurl:ital"
+url="http://my.safaribooksonline.com/?portal=oreilly">Safari Books
+Online</ulink>] is an on-demand digital library that delivers expert
+pass:[<ulink role="orm:hideurl"
+url="http://www.safaribooksonline.com/content">content</ulink>] in
+both book and video form from the world&#8217;s leading authors in
+technology and business.
+====
+
+Technology professionals, software developers, web designers, and
+business and creative professionals use Safari Books Online as their
+primary resource for research, problem solving, learning, and
+certification training.
+
+Safari Books Online offers a range of pass:[<ulink role="orm:hideurl"
+url="http://www.safaribooksonline.com/subscriptions">product
+mixes</ulink>] and pricing programs for pass:[<ulink
+role="orm:hideurl"
+url="http://www.safaribooksonline.com/organizations-teams">organizations</ulink>],
+pass:[<ulink role="orm:hideurl"
+url="http://www.safaribooksonline.com/government">government
+agencies</ulink>], and pass:[<ulink role="orm:hideurl"
+url="http://www.safaribooksonline.com/individuals">individuals</ulink>].
+Subscribers have access to thousands of books, training videos, and
+prepublication manuscripts in one fully searchable database from
+publishers like O’Reilly Media, Prentice Hall Professional,
+Addison-Wesley Professional, Microsoft Press, Sams, Que, Peachpit
+Press, Focal Press, Cisco Press, John Wiley & Sons, Syngress, Morgan
+Kaufmann, IBM Redbooks, Packt, Adobe Press, FT Press, Apress, Manning,
+New Riders, McGraw-Hill, Jones & Bartlett, Course Technology, and
+dozens pass:[<ulink role="orm:hideurl"
+url="http://www.safaribooksonline.com/publishers">more</ulink>]. For
+more information about Safari Books Online, please visit us
+pass:[<ulink role="orm:hideurl"
+url="http://www.safaribooksonline.com/">online</ulink>].
+
+=== How to Contact Us
+
+Please address comments and questions concerning this book to the publisher:
+
+++++
+<simplelist>
+<member>O’Reilly Media, Inc.</member>
+<member>1005 Gravenstein Highway North</member>
+<member>Sebastopol, CA 95472</member>
+<member>800-998-9938 (in the United States or Canada)</member>
+<member>707-829-0515 (international or local)</member>
+<member>707-829-0104 (fax)</member>
+</simplelist>
+++++
+
+We have a web page for this book, where we list errata, examples, and
+any additional information. You can access this page at
+link:$$http://oreil.ly/clojure-ckbk$$[].
+
+++++
+<remark>Don't forget to update the link above.</remark>
+++++
+
+To comment or ask technical questions about this book, send email to
+pass:[<email>bookquestions@oreilly.com</email>].
+
+For more information about our books, courses, conferences, and news,
+see our website at link:$$http://www.oreilly.com$$[].
+
+Find us on Facebook: link:$$http://facebook.com/oreilly$$[]
+
+Follow us on Twitter: link:$$http://twitter.com/oreillymedia$$[] or link:$$https://twitter.com/clojurecookbook$$[]
+
+Watch us on YouTube: link:$$http://www.youtube.com/oreillymedia$$[]
+
+include::acknowledgements.asciidoc[]

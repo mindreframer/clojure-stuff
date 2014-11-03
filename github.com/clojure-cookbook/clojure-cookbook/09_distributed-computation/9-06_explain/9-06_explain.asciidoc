@@ -1,0 +1,81 @@
+=== Explaining a Cascalog Query
+[role="byline"]
+by Alex Robbins
+
+==== Problem
+
+Your Cascalog job runs very slowly and you aren't sure why.(((Cascalog, explaining queries)))(((queries, explaining Cascalog)))((("performance/production", "improving Cascalog speed")))
+
+==== Solution
+
+Use the +cascalog.api/explain+ function to print out a DOT file of
+your query. You can follow along by launching a REPL in an existing
+project, like that created in <<sec_cascalog_etl>>:
+
+[source,clojure]
+----
+(require '[cascalog.api :refer [explain <-]])
+
+(explain "slow-query.dot" (<- [?a ?b] ([[1 2]] ?a ?b)))
+----
+
+Next, you'll want to view the DOT file. There are many ways to do that,
+but the easiest is probably by using +dot+, one of the Graphviz tools,
+to convert a DOT file to a PNG or GIF:
+
+[source,shell-session]
+----
+$ dot -Tpng -oslow-query.png slow-query.dot
+----
+
+Now open _slow-query.png_ (shown in <<fig9-1>>) to see a diagram of your query.
+
+[[fig9-1]]
+._slow-query.png_
+[float="true"]
+image::images/clcb_0901.png[]
+
+==== Discussion
+
+Cascalog workflows compile into Cascading workflows. http://www.cascading.org/[Cascading] is a
+Java library that wraps Hadoop, providing a flow-based plumbing
+abstraction. The query graph in the DOT file will have different
+Cascading elements as nodes.(((Cascading library)))(((Java, Cascading library)))(((Hadoop, Cascading library)))
+
+The +explain+ function here is analogous to the EXPLAIN command in
+many SQL implementations. +explain+ causes Cascalog to print out the
+query plan. And as with the output from an SQL EXPLAIN, you might have
+to work to understand exactly what you are seeing.
+
+The biggest thing to look for is that the basic flow of the query is
+what you expected. Make sure that you aren't rerunning some parts of
+your query. Cascalog makes it easy to reuse queries, but often you
+want to run the query, save the results, then reference the saved
+results from other queries instead of running it once for every time
+its output is used.
+
+You can also work to match up the phases from your query plan to a job
+as it is running. This is tricky, because the phases won't correspond
+exactly to your output map. However, when you succeed, you'll be able
+be able to track down the slow phases.
+
+In general, to keep your Cascalog queries fast, make sure you are
+using all of the nodes in your cluster. That means keeping the work in
+small, evenly sized units. If one map input takes 1,000 times as long
+to run as the other 40 inputs, your whole job will wait on the one
+mapper to finish. Working to split the long map job into 1,000 smaller
+jobs would make the job run much faster, since it could be
+distributed across the entire cluster instead of running on a single
+node. It is particularly easy to accidentally have nearly the entire
+job end up in one reducer. This is easy to see happening in the Hadoop
+job tracker, when nearly all the reducers are done and the job is
+waiting on one or two reducers to finish. To fix this, do as much
+reduce work as possible during the map phase using aggregators, and
+then make sure that the remaining reduce work isn't all piling up into
+a small number of reducers.
+
+==== See Also
+
+* <<sec_aggregating_large_files>>
+*   http://bit.ly/cascalog-flow-vis["Cascading
+  Flow Visualization"] on Cascalog pass:[<phrase role='keep-together'>wiki</phrase>]

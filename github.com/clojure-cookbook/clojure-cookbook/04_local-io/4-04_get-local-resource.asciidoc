@@ -1,0 +1,102 @@
+[[sec_local_io_get_local_resource]]
+=== Accessing Resource Files
+[role="byline"]
+by John Jacobsen, with help from John Cromartie and Alex Petrov
+
+==== Problem
+
+You want to include a resource file from the classpath in your
+Clojure project.((("I/O (input/output) streams", "accessing resource files")))(((files, accessing resource files)))((("resources, accessing local")))
+
+==== Solution
+
+Place resource files in the _resources/_ directory at the top level of
+your Leiningen project. To follow along with this recipe, create a new project
+with the command *+lein new people+*.(((directories, resources)))
+
+For example, suppose you have a file _resources/people.edn_ with the following contents:
+
+[source,clojure]
+----
+[{:first-name "John", :last-name "McCarthy", :language "Lisp"}
+ {:first-name "Guido", :last-name "Van Rossum", :language "Python"}
+ {:first-name "Rich", :last-name "Hickey", :language "Clojure"}]
+----
+
+Pass the name of the file (relative to the _resources_ directory) to
+the +clojure.java.io/resource+ function to obtain an instance of((("Clojure", "clojure.java.io/resource")))(((Java, java.io.File)))
++java.io.File+, which you can then read as you please (for example,
+using the +slurp+ function):
+
+[source,clojure]
+----
+(require '[clojure.java.io :as io]
+         '[clojure.edn :as edn])
+
+(->> "people.edn"
+     io/resource
+     slurp
+     edn/read-string
+     (map :language))
+;; -> ("Lisp" "Python" "Clojure")
+----
+
+==== Discussion
+
+Resources are commonly used to store any kind of file that is
+logically a part of your application, but is not code.
+
+Resources are loaded via the Java classpath, just like Clojure code
+is. Leiningen puts the _resources/_ directory on the classpath
+automatically whenever it starts a Java process, and when packaged,
+the contents of _resources/_ are copied to the root of any emitted JAR
+files.(((Java, classpaths)))
+
+You can also specify an alternative (or additional) resource directory using the
+`:resources-paths` key in your _project.clj_:
+
+[source,clojure]
+----
+:resource-paths ["my-resources" "src/other-resources"]
+----
+
+Using classpath-based resources is very convenient, but it does have
+its drawbacks.((("resources, classpath-based")))
+
+Be aware that in the context of a web application, any change to
+resources is likely to require a full redeployment, because they are
+included wholesale in the JAR or WAR file that will be
+deployed. Typically, this means it's best to use resources only for
+items that really are completely static. For example, though it's
+possible to place your application's configuration files in the
+_resources/_ directory and load them from there, to do so is really to
+make them part of your application's source code, which rather defeats
+the purpose. You may wish to load that kind of (relatively) frequently
+changing resource in a known filesystem location and load from there
+instead, rather than using the classpath.
+
+Also, there are sometimes additional reasons to _not_ serve from the
+classpath. For example, consider static images on a website. If you
+place them in your web application's classpath, then they will be
+served by your application server container (Jetty, Tomcat, JBoss,
+etc.). Typically, these applications are optimized for serving dynamic
+HTML resources, not larger binary blobs. Serving larger static files
+is often more suited to the _HTTP server_ level of your architecture
+than the _application server_ level, and should be delegated to
+Apache, Nginx, or whatever other HTTP server you're using. Or, you
+might even want to split them off and serve them via a separate
+mechanism entirely, such as a content delivery network (CDN). In
+either case, it is difficult to set up the HTTP server or CDN to
+introspect resources _inside_ of your application's JAR file--it's
+usually better to store them elsewhere, from the start.((("CDNs (content delivery networks)")))
+
+==== See Also
+
+* The Leiningen
+  http://bit.ly/lein-sample[+sample.project.clj+],
+  which includes a more detailed description of how the +:resource-paths+ option works
+* <<sec_local_io_clojure_data_to_disk>>
+
+++++
+<?hard-pagebreak?>
+++++

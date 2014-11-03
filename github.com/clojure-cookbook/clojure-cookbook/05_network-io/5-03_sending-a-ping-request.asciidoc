@@ -1,0 +1,52 @@
+=== Sending a Ping Request
+[role="byline"]
+by Jason Webb
+
+==== Problem
+
+You want to ping an IP address to check availability.(((networking/web services, ping requests)))(((ping requests)))((("IP addresses, checking availability of")))(((Java, java.net/InetAddress)))
+
+==== Solution
+
+Use the +java.net.InetAddress+ class to test if the address +isReachable+:
+
+[source,clojure]
+----
+(.isReachable (java.net.InetAddress/getByName "oreilly.com") 5000)
+;; -> true
+----
+
+==== Discussion
+
+Using +isReachable+ works great if the correct permissions can be
+obtained. On a typical Unix-like implementation, you will need to start
+your Clojure instance with +sudo+ to get an actual ICMP ping sent.
+Otherwise, a standard connection will be attempted on port 7, which in
+most cases will be blocked by a firewall. More information can be
+found in the http://bit.ly/javadoc-isReachable[javadoc].(((Unix, ping requests)))(((ICMP ping requests)))
+
+A common need when pinging another machine is to time the ping. You
+can wrap an +.isReachable+ invocation in a function +timed-ping+ to
+return timing values with every ping:
+
+[source,clojure]
+----
+(defn timed-ping
+  "Time an .isReachable ping to a given domain"
+  [domain timeout]
+  (let [addr (java.net.InetAddress/getByName domain)
+        start (. System (nanoTime))
+        result (.isReachable addr timeout)
+        total (/ (double (- (. System (nanoTime)) start)) 1000000.0)]
+    {:time total
+     :result result}))
+  
+(timed-ping "oreilly.com" 5000)
+;; -> {:time 88.07, :result true}
+----
+
+[[sec_sending_ping_see_also]]
+==== See Also
+
+* http://bit.ly/javadoc-isReachable[InetAddress/isReachable
+  documentation]
