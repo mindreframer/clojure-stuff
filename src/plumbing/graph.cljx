@@ -19,15 +19,16 @@
    keywords (mimicking lexical scope in the case of nested maps), or failing that,
    from keywords in the input map.
 
-   For more details and examples of Graphs, see test/plumbing/graph_examples_test.clj."
+   For more details and examples of Graphs, see test/plumbing/graph_examples_test.cljx."
+  (:refer-clojure :exclude [compile])
   (:require
-   [lazymap.core :as lazymap]
+   #+clj [lazymap.core :as lazymap]
    [schema.core :as s]
-   [plumbing.fnk.schema :as schema]
+   [plumbing.fnk.schema :as schema :include-macros true]
    [plumbing.fnk.pfnk :as pfnk]
-   [plumbing.fnk.impl :as fnk-impl]
-   [plumbing.graph.positional :as graph-positional]
-   [plumbing.core :as plumbing]
+   #+clj [plumbing.fnk.impl :as fnk-impl]
+   #+clj [plumbing.graph.positional :as graph-positional]
+   [plumbing.core :as plumbing :include-macros true]
    [plumbing.map :as map]))
 
 
@@ -66,10 +67,16 @@
          ::self graph}))))
 
 ;; Any Clojure map can be treated as a graph directly, without calling ->graph
-(extend-type clojure.lang.IPersistentMap
-  pfnk/PFnk
-  (io-schemata [g]
-    (plumbing/safe-get (meta (->graph g)) ::io-schemata)))
+
+(defn io-schemata* [g]
+  (plumbing/safe-get (meta (->graph g)) ::io-schemata))
+
+(extend-protocol pfnk/PFnk
+  #+clj clojure.lang.IPersistentMap
+  #+cljs cljs.core.PersistentArrayMap
+  (io-schemata [g] (io-schemata* g))
+  #+cljs cljs.core.PersistentHashMap
+  (io-schemata [g] (io-schemata* g)))
 
 (defn- split-nodes [s]
   (loop [in s out []]
@@ -81,7 +88,7 @@
 
 (defn graph
   "An ordered constructor for graphs, which enforces that the Graph is provided
-   in a vaid topological ordering.  This is a sanity check, and also enforces
+   in a valid topological ordering.  This is a sanity check, and also enforces
    defining graphs in a readable way.  Most explicit graphs should be created
    with this constructor.
 
@@ -93,13 +100,14 @@
    sequence, which will be merged into the graph at this position."
   [& nodes]
   (let [partitioned (split-nodes nodes)]
-    (fnk-impl/assert-distinct (map first partitioned))
+    (schema/assert-distinct (map first partitioned))
     (->graph partitioned)))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Compiling and running graphs
 
+#+clj
 (defn eager-compile
   "Compile graph specification g to a corresponding fnk that is optimized for
    speed. Wherever possible, fnks are called positionally, to reduce the
@@ -113,6 +121,7 @@
               [k (eager-compile sub-g)])]
       (graph-positional/positional-flat-compile (->graph g)))))
 
+#+clj
 (defn positional-eager-compile
   "Like eager-compile, but produce a non-keyword function that can be called
    with args in the order provided by arg-ks, avoiding the overhead of creating
@@ -120,7 +129,6 @@
    fn for Graphs with very computationally inexpensive node fnks."
   [g arg-ks]
   (fnk-impl/positional-fn (eager-compile g) arg-ks))
-
 
 (defn simple-flat-compile
   "Helper method for simple (non-nested) graph compilations that convert a graph
@@ -167,7 +175,7 @@
 (defn interpreted-eager-compile
   "Compile graph specification g to a corresponding fnk that returns an
    ordinary Clojure map of the node result fns on a given input.  The
-   compilation is must faster than 'eager-compile', but the compiled fn
+   compilation is much faster than 'eager-compile', but the compiled fn
    will typically be much slower."
   [g]
   (simple-hierarchical-compile
@@ -176,6 +184,7 @@
    (fn [m] m)
    (fn [m k f] (assoc m k (restricted-call f m)))))
 
+#+clj
 (defn lazy-compile
   "Compile graph specification g to a corresponding fnk that returns a
    lazymap of the node result fns on a given input.  This fnk returns
@@ -191,8 +200,8 @@
    (fn [m] (reduce-kv assoc (lazymap/lazy-hash-map) m)) ;; into is extremely slow on lazymaps.
    (fn [m k f] (lazymap/delay-assoc m k (delay (restricted-call f m))))))
 
-;; TODO: move out.
-(defn par-compile [g]
+#+clj ;; TODO: move out.
+(defn par-compile
   "Experimental.  Launches one future per node at startup; we probably woudln't
    use this in production, and will release more sophisticated parallel
    compilations later.
@@ -203,12 +212,21 @@
    starting immediately (and attempts to extract values from the lazymap will
    block until each value is computed).  Besides this lazy behavior,
    the lazymap can be used interchangeably with an ordinary Clojure map."
+  [g]
   (simple-hierarchical-compile
    g
    true
    (fn [m] (into (lazymap/lazy-hash-map) m))
    (fn [m k f] (lazymap/delay-assoc m k (future (restricted-call f m))))))
 
+(defn compile
+  "Compile graph specification g to a corresponding fnk using the a default
+   compile strategy for host.
+   Clojure: eager-compile
+   ClojureScript: interpreted-eager-compile"
+  [g]
+  #+clj  (eager-compile g)
+  #+cljs (interpreted-eager-compile g))
 
 (defn run
   "Eagerly run a graph on an input by compiling and then executing on this input."
@@ -278,7 +296,6 @@
   ([g bind m]
      `(comp-partial ~g (plumbing/fnk ~bind ~m))))
 
-
 (defn profiled
   "Modify graph spec g, producing a new graph spec with a new top-level key
    'profile-key'.  After each node value is computed, the number of milliseconds
@@ -291,9 +308,11 @@
              (pfnk/fn->fnk
               (fn [m]
                 (let [pm (plumbing/safe-get m profile-key)
-                      start (System/nanoTime)
+                      start #+clj (System/nanoTime) #+cljs (plumbing/millis)
                       res (f (dissoc m profile-key))]
-                  (swap! pm assoc-in ks (/ (- (System/nanoTime) start) 1000000.0))
+                  (swap! pm assoc-in ks
+                         #+clj  (/ (- (System/nanoTime) start) 1000000.0)
+                         #+cljs (- (plumbing/millis) start))
                   res))
               [(assoc (pfnk/input-schema f)
                  profile-key s/Any)

@@ -1,5 +1,35 @@
+## 0.3.5
+ * Fix bug in `safe-get` in ClojureScript due to missing `:include-macros true` in plumbing.core
+
+## 0.3.4
+ * Add `plumbing.map/keyword-map`, `plumbing.core/if-letk`, `plumbing.core/when-letk`
+ * Bump schema version to 0.3.1, fixing cljs warnings from that project, and move schema.macros calls over to schema.core.
+ * Minimum required schema version is now 0.3.0
+
+## 0.3.3
+ * Properly generate cross-platform assertions, fixing ClojureScript errors that tried to throw Java errors.
+
+## 0.3.2
+ * Fix cljs compilation issue appearing in some circumstances (No such namespace: js)
+
+## 0.3.1
+ * Fix cljs issue where plumbing.fnk.schema was missing from dependency tree
+
+## 0.3.0
+ * **BREAKING**: `?>` and `?>>` require a body expression in parens, and take an arbitrary number of body expressions. 
+ * Add ClojureScript support via cljx
+ * Add plumbing.graph-async namespace to define asynchronous graphs using core.async channels. A core.async dependency has *not* been added to project.clj and must be supplied by user if this namespace is used.
+ * Add `update` and `mapply` to plumbing.core
+
+## 0.2.2
+ * Don't depend on a specific Clojure version, and add support for Clojure 1.6.x
+
+## 0.2.1
+ * Fix for issues with AOT compilation after introducing schema
+
 ## 0.2.0
- * Replace fnk/graph's internal schema format with `prismatic/schema`.
+ * Replace fnk/graph's internal schema format with `prismatic/schema`.  This is a breaking change if (and only if) you've explicitly written old-style fnk/graph schemas like `{:x true :y false}`, or code for manipulating such schemas.
+ * Drop support for Clojure 1.4.x
 
 ## 0.1.1
  * Fix bug when aliasing optional values with arg names, i.e. `(let [a 1] ((fnk [{a a}] a) {}))`

@@ -1,12 +1,20 @@
 (ns plumbing.core
   "Utility belt for Clojure in the wild"
+  #+cljs
+  (:require-macros
+   [plumbing.core :refer [for-map lazy-get]])
   (:require
-   [schema.macros :as sm]
-   [plumbing.fnk.schema :as schema]
-   [plumbing.fnk.pfnk :as pfnk]
-   [plumbing.fnk.impl :as fnk-impl]))
+   [schema.utils :as schema-utils]
+   #+clj [schema.macros :as schema-macros]
+   [plumbing.fnk.schema :as schema :include-macros true]
+   #+clj [plumbing.fnk.impl :as fnk-impl])
+  (:refer-clojure :exclude [update]))
 
-(set! *warn-on-reflection* true)
+#+clj (set! *warn-on-reflection* true)
+
+(def ^:private +none+
+  "A sentinel value representing missing portions of the input data."
+  ::missing)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Maps
@@ -29,6 +37,16 @@
           (let [~m-sym @m-atom#]
             (reset! m-atom# (assoc! ~m-sym ~key-expr ~val-expr))))
         (persistent! @m-atom#))))
+
+(defn update
+  "Updates the value in map m at k with the function f.
+
+  Like update-in, but for updating a single top-level key.
+  Any additional args will be passed to f after the value."
+  ([m k f] (assoc m k (f (get m k))))
+  ([m k f x1] (assoc m k (f (get m k) x1)))
+  ([m k f x1 x2] (assoc m k (f (get m k) x1 x2)))
+  ([m k f x1 x2 & xs] (assoc m k (apply f (get m k) x1 x2 xs))))
 
 (defn map-vals
   "Build map k -> (f v) for [k v] in map, preserving the initial type"
@@ -63,7 +81,7 @@
    (including at the top-level)."
   [m [k & ks]]
   (when m
-    (if-let [res (and ks (dissoc-in (m k) ks))]
+    (if-let [res (and ks (dissoc-in (get m k) ks))]
       (assoc m k res)
       (let [res (dissoc m k)]
         (when-not (empty? res)
@@ -73,15 +91,16 @@
   "Recursively convert maps in m (including itself)
    to have keyword keys instead of string"
   [x]
-  (condp instance? x
-    clojure.lang.IPersistentMap
-    (for-map [[k v] x]
-      (if (string? k) (keyword k) k) (keywordize-map v))
-    clojure.lang.IPersistentList
-    (map keywordize-map x)
-    clojure.lang.IPersistentVector
-    (into [] (map keywordize-map x))
-    x))
+  (cond
+   (map? x)
+   (for-map [[k v] x]
+     (if (string? k) (keyword k) k) (keywordize-map v))
+   (seq? x)
+   (map keywordize-map x)
+   (vector? x)
+   (mapv keywordize-map x)
+   :else
+   x))
 
 (defmacro lazy-get
   "Like get but lazy about default"
@@ -93,7 +112,9 @@
 (defn safe-get
   "Like get but throw an exception if not found"
   [m k]
-  (lazy-get m k (throw (IllegalArgumentException. (format "Key %s not found in %s" k (mapv key m))))))
+  (lazy-get
+   m k
+   (schema/assert-iae false "Key %s not found in %s" k (mapv key m))))
 
 (defn safe-get-in
   "Like get-in but throws exception if not found"
@@ -114,8 +135,8 @@
 (defn update-in-when
   "Like update-in but returns m unchanged if key-seq is not present."
   [m key-seq f & args]
-  (let [found (get-in m key-seq ::sent)]
-    (if-not (identical? ::sent found)
+  (let [found (get-in m key-seq +none+)]
+    (if-not (identical? +none+ found)
       (assoc-in m key-seq (apply f found args))
       m)))
 
@@ -178,6 +199,7 @@
   [f s]
   (keep-indexed (fn [i x] (when (f x) i)) s))
 
+#+clj
 (defn frequencies-fast
   "Like clojure.core/frequencies, but faster.
    Uses Java's equal/hash, so may produce incorrect results if
@@ -188,6 +210,7 @@
       (.put res x (unchecked-inc (int (or (.get res x) 0)))))
     (into {} res)))
 
+#+clj
 (defn distinct-fast
   "Like clojure.core/distinct, but faster.
    Uses Java's equal/hash, so may produce incorrect results if
@@ -201,13 +224,20 @@
    values according to f. If multiple elements of xs return the same
    value under f, the first is returned"
   [f xs]
-  (let [s (java.util.HashSet.)]
-    (for [x xs
-          :let [id (f x)]
-          :when (not (.contains s id))]
-      (do (.add s id)
-          x))))
+  #+clj  (let [s (java.util.HashSet.)]
+           (for [x xs
+                 :let [id (f x)]
+                 :when (not (.contains s id))]
+             (do (.add s id)
+                 x)))
+  #+cljs (let [s (atom #{})]
+           (for [x xs
+                 :let [id (f x)]
+                 :when (not (contains? @s id))]
+             (do (swap! s conj id)
+                 x))))
 
+#+clj
 (defn distinct-id
   "Like distinct but uses reference rather than value identity, very clojurey"
   [xs]
@@ -254,17 +284,17 @@
 ;;; Control flow
 
 (defmacro ?>>
-  "Conditional double-arrow operation (->> nums (?>> inc-all? map inc))"
-  [do-it? f & args]
+  "Conditional double-arrow operation (->> nums (?>> inc-all? (map inc)))"
+  [do-it? & args]
   `(if ~do-it?
-     (~f ~@args)
+     (->> ~(last args) ~@(butlast args))
      ~(last args)))
 
 (defmacro ?>
-  "Conditional single-arrow operation (-> m (?> add-kv? assoc :k :v))"
-  [arg do-it? f & rest]
+  "Conditional single-arrow operation (-> m (?> add-kv? (assoc :k :v)))"
+  [arg do-it? & rest]
   `(if ~do-it?
-     (~f ~arg ~@rest)
+     (-> ~arg ~@rest)
      ~arg))
 
 (defmacro fn->
@@ -296,7 +326,7 @@
   "Like fn, but memoized (including recursive calls).
 
    The clojure.core memoize correctly caches recursive calls when you do a top-level def
-   of your memozied function, but if you want an annoymous fibonacci function, you must use
+   of your memoized function, but if you want an anonymous fibonacci function, you must use
    memoized-fn rather than memoize to cache the recursive calls."
   [name args & body]
   `(let [a# (atom {})]
@@ -330,7 +360,14 @@
   (first (swap-pair! a (constantly new-val))))
 
 (defn millis ^long []
-  (System/currentTimeMillis))
+  #+clj  (System/currentTimeMillis)
+  #+cljs (.getTime (js/Date.)))
+
+(defn mapply
+  "Like apply, but applies a map to a function with positional map
+  arguments. Can take optional initial args just like apply."
+  ([f m] (apply f (apply concat m)))
+  ([f arg & args] (apply f arg (concat (butlast args) (apply concat (last args))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; fnk
@@ -365,6 +402,30 @@
    `(do ~@body)
    (reverse (partition 2 bindings))))
 
+(defmacro if-letk
+  "bindings => binding-form test
+
+  If test is true, evaluates then with binding-form bound to the value of
+  test, if not, yields else"
+  ([bindings then]
+     `(if-letk ~bindings ~then nil))
+  ([bindings then else]
+     (assert (vector? bindings) "if-letk requires a vector for its binding")
+     (assert (= 2 (count bindings)) "if-letk requires exactly 2 forms in binding vector")
+     (let [form (bindings 0) tst (bindings 1)]
+       `(let [temp# ~tst]
+          (if temp#
+            (letk [~form temp#]
+              ~then)
+            ~else)))))
+
+(defmacro when-letk
+  "bindings => binding-form test
+
+  When test is true, evaluates body with binding-form bound to the value of test"
+  [bindings & body]
+  `(if-letk ~bindings (do ~@body)))
+
 (defmacro fnk
   "Keyword fn, using letk.  Generates a prismatic/schema schematized fn that
    accepts a single explicit map i.e., (f {:foo :bar}).
@@ -373,7 +434,7 @@
    to capture implicit structure use an explicit prismatic/schema hint on the
    function name.
 
-   Inividual inputs can also be schematized by putting :- schemas after the
+   Individual inputs can also be schematized by putting :- schemas after the
    binding symbol.  Schemas can also be used on & more symbols to describe
    additional map inputs, or on entire [] bindings to override the automatically
    generated schema for the contents (caveat emptor).
@@ -382,22 +443,22 @@
    ({s/Keyword s/Any}) unless explicit binding or & more schemas are provided."
   [& args]
   (let [[name? more-args] (if (symbol? (first args))
-                            (sm/extract-arrow-schematized-element &env args)
+                            (schema-macros/extract-arrow-schematized-element &env args)
                             [nil args])
-        [bind body] (sm/extract-arrow-schematized-element &env more-args)]
+        [bind body] (schema-macros/extract-arrow-schematized-element &env more-args)]
     (fnk-impl/fnk-form &env name? bind body)))
 
 (defmacro defnk
   "Analogy: fn:fnk :: defn::defnk"
   [& defnk-args]
-  (let [[name args] (sm/extract-arrow-schematized-element &env defnk-args)
+  (let [[name args] (schema-macros/extract-arrow-schematized-element &env defnk-args)
         take-if (fn [p s] (if (p (first s)) [(first s) (next s)] [nil s]))
         [docstring? args] (take-if string? args)
         [attr-map? args] (take-if map? args)
-        [bind body] (sm/extract-arrow-schematized-element &env args)]
+        [bind body] (schema-macros/extract-arrow-schematized-element &env args)]
     (schema/assert-iae (symbol? name) "Name for defnk is not a symbol: %s" name)
     (let [f (fnk-impl/fnk-form &env name bind body)]
       `(def ~(with-meta name (merge (meta name) (assoc-when (or attr-map? {}) :doc docstring?)))
          ~f))))
 
-(set! *warn-on-reflection* false)
+#+clj (set! *warn-on-reflection* false)

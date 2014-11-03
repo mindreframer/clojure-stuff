@@ -21,39 +21,16 @@
    the fnk without incurring the overhead of producing and then
    destructuring a top-level map.  See plumbing.graph.positional for
    an example use."
-  (require
+  (:require
    [clojure.set :as set]
    [schema.core :as s]
    [schema.macros :as schema-macros]
    [plumbing.fnk.schema :as schema]
    [plumbing.fnk.pfnk :as pfnk]))
 
-;; TODO: allow schemas on entire bindings (e.g., this is a defrecord)
-;; - but this poses problems since these schemas are unevaluated.
-;; - can do it, but probably have to fork into internal and external schemas.
 ;; TODO: maybe ^:strict metadata to turn off accepting additional keys?
 
 ;;; Helpers
-
-(defn safe-get
-  "Like (get m k), but throws if k is not present in m."
-  [m k key-path]
-  (when-not (map? m)
-    (throw (RuntimeException. (format "Expected a map at key-path %s, got type %s" key-path (class m)))))
-  (let [[_ v :as p] (find m k)]
-    (when-not p (throw (ex-info (format "Key %s not found in %s" k (keys m)) {:error :missing-key
-                                                                              :key   k
-                                                                              :map   m})))
-    v))
-
-(defn assert-distinct
-  "Like (assert (distinct things)) but with a more helpful error message."
-  [things]
-  (let [repeated-things (->> things
-                             frequencies
-                             (filter #(> (val %) 1))
-                             seq)]
-    (schema/assert-iae (empty? repeated-things) "Got repeated items (expected distinct): %s" repeated-things)))
 
 (defn k->sym
   "Make a keyword into a symbol"
@@ -99,7 +76,7 @@
   [env map-sym binding key-path body-form]
   (cond (symbol? binding)
         {:schema-entry [(keyword binding) (schema-macros/extract-schema-form binding)]
-         :body-form `(let [~binding (safe-get ~map-sym ~(keyword binding) ~key-path)]
+         :body-form `(let [~binding (schema/safe-get ~map-sym ~(keyword binding) ~key-path)]
                        ~body-form)}
 
         (map? binding)
@@ -109,7 +86,7 @@
           (assert-unschematized binding)
           (schema/assert-iae (= 1 (count schema-fixed-binding))
                              "optional binding has more than 1 entry: %s" schema-fixed-binding)
-          {:schema-entry [(s/optional-key bound-key) (schema-macros/extract-schema-form bound-sym)]
+          {:schema-entry [`(s/optional-key ~bound-key) (schema-macros/extract-schema-form bound-sym)]
            :body-form `(let [~bound-sym (get ~map-sym ~bound-key ~opt-val-expr)]
                          ~body-form)})
 
@@ -127,22 +104,30 @@
            (keyword? bound-key)
            "First element to nested binding not a keyword: %s" bound-key)
           {:schema-entry [bound-key inner-input-schema inner-external-input-schema]
-           :body-form `(let [~inner-map-sym (safe-get ~map-sym ~bound-key ~key-path)]
+           :body-form `(let [~inner-map-sym (schema/safe-get ~map-sym ~bound-key ~key-path)]
                          ~inner-body-form)})
 
         :else (throw (IllegalArgumentException. (format "bad binding: %s" binding)))))
 
-(defn- extract-special-arg
-  "Extract a trailing & sym or :as sym, possibly with schema metadata. Returns
-   [more-bindings extracted-symbol]"
-  [env special-arg-signifier binding-form]
-  (let [[more-bindings special-binding] (split-with #(not= % special-arg-signifier) binding-form)]
-    [more-bindings
-     (when (seq special-binding)
-       (let [[sym extra-garbage] (schema-macros/extract-arrow-schematized-element env (next special-binding))]
-         (schema/assert-iae (symbol? sym) "Argument to %s not a symbol: %s" special-arg-signifier binding-form)
-         (schema/assert-iae (empty? extra-garbage) "Got illegal special binding: %s" special-binding )
-         sym))]))
+(defn- extract-special-args
+  "Extract trailing & sym and :as sym, possibly with schema metadata. Returns
+  [more-bindings special-args-map] where special-args-map is a map from each
+  special symbol found to the symbol that was found."
+  [env special-arg-signifier-set binding-form]
+  {:pre [(set? special-arg-signifier-set)]}
+  (let [[more-bindings special-bindings] (split-with (complement special-arg-signifier-set) binding-form)]
+    (loop [special-args-map {}
+           special-arg-set special-arg-signifier-set
+           [arg-signifier & other-bindings :as special-bindings] special-bindings]
+      (if-not (seq special-bindings)
+        [more-bindings special-args-map]
+        (do
+          (schema/assert-iae (special-arg-set arg-signifier) "Got illegal special arg: " arg-signifier)
+          (let [[sym remaining-bindings] (schema-macros/extract-arrow-schematized-element env other-bindings)]
+            (schema/assert-iae (symbol? sym) "Argument to %s not a symbol: %s" arg-signifier binding-form)
+            (recur (assoc special-args-map arg-signifier sym)
+                   (disj special-arg-set arg-signifier)
+                   remaining-bindings)))))))
 
 (defn letk-input-schema-and-body-form
   "Given a single letk binding form, value form, key path, and body
@@ -154,8 +139,7 @@
   [env binding-form key-path body-form]
   (schema/assert-iae (vector? binding-form) "Binding form is not vector: %s" binding-form)
   (let [binding-schema (schema-macros/extract-schema-form binding-form)
-        [binding-form more-sym] (extract-special-arg env '& binding-form)
-        [bindings as-sym]       (extract-special-arg env :as binding-form)
+        [bindings {more-sym '& as-sym :as}] (extract-special-args env #{'& :as} binding-form)
         as-sym (or as-sym (ensure-schema-metadata env (gensym "map")))
         [input-schema-elts
          external-input-schema-elts
@@ -173,10 +157,8 @@
                            (reverse
                             (schema-macros/process-arrow-schematized-args
                              env bindings)))
-        explicit-schema-keys (->> input-schema-elts
-                                  (map first)
-                                  (filter s/specific-key?)
-                                  (map s/explicit-schema-key))
+        explicit-schema-keys (keep (comp first schema/unwrap-schema-form-key first)
+                                   input-schema-elts)
         final-body-form (if more-sym
                           `(let [~more-sym (dissoc ~as-sym ~@explicit-schema-keys)]
                              ~bound-body-form)
@@ -196,8 +178,8 @@
                                        more-schema))))))]
     (when as-sym (assert-unschematized as-sym))
     (schema/assert-iae (not (some #{'&} (map first input-schema-elts))) "Cannot bind to &")
-    (assert-distinct (concat (map k->sym explicit-schema-keys)
-                             (remove nil? [more-sym as-sym])))
+    (schema/assert-distinct (concat (map k->sym explicit-schema-keys)
+                                    (remove nil? [more-sym as-sym])))
     {:input-schema (make-input-schema input-schema-elts)
      :external-input-schema (if-not (any-schema? binding-schema)
                               binding-schema
@@ -320,43 +302,36 @@
      pos-fn)))
 
 (defn positional-fnk-form
-  "Takes an optional name, input schema and a positional fn body that can
-   reference the symbol versions of keywords in input-schema, and
-   produces a form generating a IFn/PFnk that can be called as a keyword function,
+  "Takes an optional name, input schema, seq of ordered [key optional?] pairs,
+   an arg-sym-map from these keywords to symbols, and and a positional fn body
+   that can reference these symbols.
+   Produces a form generating a IFn/PFnk that can be called as a keyword function,
    and has metadata containing the positional function for efficient compilation
    as described in 'efficient-call-forms' and 'positional-fn' above, with
-   argument order the same as in input-schema by default.  An explicit
-   arg-sym-map from keywords to symbols can also be passed to provide explicit
-   symbols for each arg, and propagate argument tag megadata into the fn. Example:
+   argument order the same as in input-schema by default.   Example:
 
-   (def f (eval (i/positional-fnk-form 'foo [{:x true :y false} true]
+   (def f (eval (i/positional-fnk-form 'foo {:x s/Any (s/optional-key :y) s/Any}
                    [`(+ ~'x (if (= ~'y i/+none+) 5 ~'y))])))
 
    (= [6 3] [(f {:x 1}) (f {:x 1 :y 2})])
-   (= [6 3] [((i/positional-fn f [:x]) 1) ((i/positional-fn f [:y :x]) 2 1)])"
-  ([fn-name input-schema body]
-     (positional-fnk-form
-      fn-name
-      input-schema
-      input-schema
-      (into {} (for [k (keys (schema/explicit-schema-key-map input-schema))] [k (k->sym k)]))
-      body))
-
-  ([fn-name input-schema external-input-schema arg-sym-map body]
-     (let [[req-ks opt-ks] (-> input-schema schema/explicit-schema-key-map schema/split-schema-keys)
-           explicit-schema-keys (vec (keys (schema/explicit-schema-key-map input-schema)))
-           pos-args (mapv #(safe-get arg-sym-map % []) explicit-schema-keys)]
-       `(let [pos-fn# (fn ~(symbol (str fn-name "-positional"))
-                        ~pos-args
-                        ~@body)]
-          (vary-meta (schema-macros/fn
-                       ~fn-name
-                       [m# :- ~external-input-schema]
-                       (plumbing.core/letk [~(into (mapv k->sym req-ks)
-                                                   (mapv (fn [k] {(k->sym k) +none+}) opt-ks))
-                                            m#]
-                         (pos-fn# ~@(mapv k->sym explicit-schema-keys))))
-                     assoc ::positional-info [pos-fn# ~explicit-schema-keys])))))
+   (= [6 3] [((i/positional-fn f [:x]) 1) ((i/positional-fn f [:y :x]) 2 1)])."
+  [fn-name external-input-schema ordered-ks->opt arg-sym-map body]
+  (let [[req-ks opt-ks] (schema/split-schema-keys (into {} ordered-ks->opt))
+        explicit-schema-keys (mapv first ordered-ks->opt)
+        pos-args (mapv #(do (schema-macros/assert-c! (contains? arg-sym-map %))
+                            (arg-sym-map %))
+                       explicit-schema-keys)]
+    `(let [pos-fn# (fn ~(symbol (str fn-name "-positional"))
+                     ~pos-args
+                     ~@body)]
+       (vary-meta (s/fn
+                    ~fn-name
+                    [m# :- ~external-input-schema]
+                    (plumbing.core/letk [~(into (mapv k->sym req-ks)
+                                                (mapv (fn [k] {(k->sym k) +none+}) opt-ks))
+                                         m#]
+                      (pos-fn# ~@(mapv k->sym explicit-schema-keys))))
+                  assoc ::positional-info [pos-fn# ~explicit-schema-keys]))))
 
 ;;; Generating fnk bodies
 
@@ -381,10 +356,16 @@
                         (schema/guess-expr-output-schema (last body))
                         explicit-output-schema)
         fn-name (vary-meta (or name? (gensym "fnk")) assoc :schema output-schema)]
-    (if (not-any? #{'& :as} bind) ;; If we can make a positional fnk form, do it.
+    (if (and (not (schema-macros/cljs-env? env))
+             (not-any? #{'& :as} bind)) ;; If we can make a positional fnk form, do it.
       (let [[bind-sym-map bound-body] (positional-arg-bind-syms-and-body env bind `(do ~@body))]
-        (positional-fnk-form fn-name input-schema external-input-schema bind-sym-map [bound-body]))
-      `(schema-macros/fn
+        (positional-fnk-form
+         fn-name
+         external-input-schema
+         (vec (schema/explicit-schema-key-map input-schema))
+         bind-sym-map
+         [bound-body]))
+      `(s/fn
          ~fn-name
          [~(schema-override map-sym external-input-schema)]
          (schema/assert-iae (map? ~map-sym) "fnk called on non-map: %s" ~map-sym)
