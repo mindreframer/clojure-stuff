@@ -1,30 +1,47 @@
 (ns yesql.util-test
-  (:require [clojure.test :refer :all]
+  (:require [expectations :refer :all]
+            [clojure.template :refer [do-template]]
             [yesql.util :refer :all]))
 
-(deftest distinct-except-test
-  (let [coll '[a b c a b]]
-    (is (= (distinct-except coll #{'a})
-           '[a b c a]))
-    (is (= (distinct-except coll #{'b})
-           '[a b c b]))
-    (is (= (distinct-except coll #{'c})
-           '[a b c]))))
+;;; Test distinct-except
+(let [coll '[a b c a b]]
+  (expect '[a b c a]
+          (distinct-except coll #{'a}))
+  (expect '[a b c b]
+          (distinct-except coll #{'b}))
+  (expect '[a b c]
+          (distinct-except coll #{'c})))
 
-(deftest underscores-to-dashes-test
-  (is (= (underscores-to-dashes "nochange")
-         "nochange"))
-  (is (= (underscores-to-dashes "current_time")
-         "current-time")))
+;;; Test underscores-to-dashes
+(do-template [input output]
+  (expect output
+          (underscores-to-dashes input))
 
-(deftest whitespace?-test
-  (is (whitespace? ""))
-  (is (whitespace? " 	"))
-  (is (not (whitespace? "a")))
-  (is (not (whitespace? " q "))))
+  "nochange" "nochange"
+  "current_time" "current-time"
+  "this_is_it" "this-is-it")
 
-(deftest slurp-from-classpath-test
-  (is (re-find #"SELECT"
-               (slurp-from-classpath "yesql/sample_files/current_time.sql")))
-  (is (thrown? java.io.FileNotFoundException
-               (slurp-from-classpath "nothing/here"))))
+;;; Test whitespace?
+(expect whitespace? "")
+(expect whitespace? (str \space))
+(expect whitespace? (str \tab))
+(expect (complement whitespace?) "a")
+(expect (complement whitespace?) " q ")
+
+;;; Test slurp-from-classpath
+(expect #"\bSELECT\b"
+        (slurp-from-classpath "yesql/sample_files/current_time.sql"))
+
+(expect java.io.FileNotFoundException
+        (slurp-from-classpath "nothing/here"))
+
+
+;;; Test str-non-nil
+(expect ""
+        (str-non-nil))
+
+(expect "1"
+        (str-non-nil 1))
+
+(expect ":a2cd"
+        (str-non-nil :a 2 'c "d"))

@@ -1,41 +1,31 @@
-(ns yesql.named-parameters)
+(ns yesql.named-parameters
+  (:require [clojure.java.io :as io]
+            [instaparse.core :as instaparse]
+            [yesql.util :refer [process-instaparse-result str-non-nil]]))
 
-(defn- consume-to
-  [text escape? marker?]
-  (loop [accumulator []
-         [head & remainder :as string] text]
-    (cond (not head) [accumulator nil nil]
-          (and (escape? head)
-               (marker? (first remainder))) (recur (conj accumulator head (first remainder))
-                                                   (rest remainder))
-               (marker? head) [accumulator head remainder]
-               :else (recur (conj accumulator head)
-                            remainder))))
+(def parser
+  (instaparse/parser (io/resource "yesql/named_parameters.bnf")))
+
+(def parser-transforms
+  {:statement vector
+   :substatement str-non-nil
+   :string str-non-nil
+   :string-special str-non-nil
+   :string-delimiter identity
+   :string-normal identity
+   :parameter identity
+   :placeholder-parameter symbol
+   :named-parameter symbol})
 
 (defn split-at-parameters
+  "Turns a raw SQL query into a vector of SQL-substrings interspersed with clojure symbols for the query's parameters.
+
+For example, `(split-at-parameters \"SELECT * FROM person WHERE :age > age\")`
+becomes: `[\"SELECT * FROM person WHERE \" age \" > age\"]`"
   [query]
-  (loop [chars []
-         [head & tail :as remainder] query]
-    (case head
-      nil [(apply str chars)]
-      \' (let [[string marker next-bit] (consume-to tail #{\\} #{\'})]
-           (recur (into (conj chars head)
-                        (conj string marker))
-                  next-bit))
-      \? (cons (apply str chars)
-               (cons (symbol (str head))
-                     (split-at-parameters tail)))
-      \: (case (first tail)
-           \: (recur (conj chars head (first tail))
-                     (rest tail))
-           (let [[parameter marker next-bit] (consume-to tail
-                                                         (constantly false)
-                                                         #{\space \newline \, \" \' \: \& \; \( \) \| \= \+ \- \* \% \/ \\ \< \> \^})]
-             (cons (apply str chars)
-                   (cons (symbol (apply str parameter))
-                         (split-at-parameters (cons marker next-bit))))))
-      (recur (conj chars head)
-             tail))))
+  (process-instaparse-result
+   (instaparse/transform parser-transforms
+                         (instaparse/parses parser query :start :statement))))
 
 (defn- args-to-placehoders
   [args]
@@ -44,6 +34,8 @@
     (clojure.string/join "," (repeat (count args) "?"))))
 
 (defn reassemble-query
+  "Given a query that's been split into text-and-symbols, and some arguments, reassemble
+it as the pair `[string-with-?-parameters args]`, suitable for supply to `clojure.java.jdbc`."
   [split-query args]
   (assert (= (count (filter symbol? split-query))
              (count args))
