@@ -1,0 +1,197 @@
+=== Sending Email
+[role="byline"]
+by Ryan Neufeld
+
+==== Problem
+
+You need to send emails from inside a Clojure application.(((networking/web services, email)))(((email)))
+
+==== Solution
+
+Use +postal+, a thin wrapper over the JavaMail package, to send email
+messages.(((postal wrapper)))(((Java, JavaMail package)))(((functions, postal.core/send-message)))
+
+To follow along with this recipe, start a REPL using +lein-try+:
+
+[source,shell-session]
+----
+$ lein try com.draines/postal
+----
+
+Send a message by invoking the +postal.core/send-message+ function
+with two maps, the first containing connection details and the second
+containing message details. For example, to send an email message to
+yourself via a Gmail account:
+
+[source,clojure]
+----
+(require '[postal.core :refer [send-message]])
+
+;; Replace the following with your own credentials
+(def email "<<your gmail address>")
+(def pass "<your gmail password>")
+
+(def conn {:host "smtp.gmail.com"
+           :ssl true
+           :user email
+           :pass pass})
+
+(send-message conn {:from email
+                    :to email
+                    :subject "A message, from the past"
+                    :body "Hi there, me!"})
+;; -> {:error :SUCCESS, :code 0, :message "messages sent"}
+----
+
+If all is well, you should receive an email from yourself shortly
+thereafter.
+
+[WARNING]
+====
+If you've set up two-factor authentication on your Gmail account,
++send-message+ will fail with an +AuthenticationFailedException+.
+To successfully authenticate, create an
+http://bit.ly/gmail-app-specific[application-specific password] and use it as
+the value for +pass+ instead.
+====
+
+
+==== Discussion
+
+pass:[<?dbhtml orphans="4"?>]With the venerable JavaMail at its core, there isn't much +postal+
+leaves for you to worry about. Even Gmail's oft-maligned
+authentication setup can be tackled with a single +:ssl+ key. While we
+might normally suggest giving the native Java API a try for simple
+email delivery, we prefer +postal+ because it presents an API oriented
+around data rather than objects.(((Gmail)))
+
+One of the places data orientation really shines is in specifying
+connection details. The first argument to the +send-message+ function
+is a (versatile) map of connection details. Valid connection details
+are:
+
++:host+::
+  Hostname of the desired SMTP server. Optional if running locally.
++:port+::
+  Port of SMTP server. Numerous contextual defaults exist,
+  including +465+ when +:ssl+ is set or +25+ when +:tls+ is set.
++:user+::
+  Username to authenticate with (if authenticating).
++:pass+::
+  Password to authenticate with (if authenticating).
++:ssl+::
+  Enables SSL encryption if value is truthy.
++:tls+::
+  Enables TLS encryption if value is truthy.
+
+When provided _no_ connection details--either by omitting the first
+argument or passing pass:[<literal>nil</literal>]&#x2014;pass:[<literal>postal</literal>] will attempt to route email
+through a local http://bit.ly/wiki-sendmail[sendmail]
+instance.
+
+[NOTE]
+====
+Since Amazon's Simple Email Service (SES) can operate over SMTP,
+it is possible to use +postal+ to send email via Amazon's
+infrastructure.((("Amazon's Simple Email Service (SES)")))((("Simple Email Service (SES)")))
+====
+
+Similar to connection details, messages themselves are represented as
+simple maps of data. The full complement of standard headers are
+supported as message keys:
+
+* Sender options
+** +:from+
+** +:reply-to+
+* Recipient options
+** +:to+
+** +:cc+
+** +:bcc+
+* Content options
+** +:subject+
+** +:body+
+* Metadata options
+** +:date+
+** +:message-id+
+** +:user-agent+
+
+Options specified beyond these will be attached to the message as
+ancillary headers.
+
+When specifying recipients on the +:to+, +:cc+, or +:bcc+ keys, values
+may be either a single address or a sequence of addresses:
+
+[source,clojure]
+----
+{:to "joe@example.com"
+ :cc ["joe@example.com", "jim@example.com", "jeff@example.com"]
+ :bcc "archive@example.com"}
+----
+
+A message's body can be specified as either a string or a sequence of
+_part_ maps. While the former delivers a simple plain-text email, the
+latter will deliver a multipart _MIME_ message. MIME (Multipurpose Internet Mail Extensions) is the standard
+that allows email messages to contain attachments or other rich
+content, such as HTML.((("MIME (Multipurpose Internet Mail Extensions)")))(((maps, part maps)))(((part maps)))
+
+A part map is made up of two values: +:type+ and +:content+. For
+message body parts, +:type+ is the MIME type of the content, and
++:content+ is the textual representation of said content. For example,
+to create a message with both plain text and HTML representations of
+the content:
+
+[source,clojure]
+----
+:body [:alternative
+       {:type "text/plain"
+        :content "You just won the lottery!"}
+       {:type "text/html"
+        :content "<html>
+                    <body>
+                      <p>You just <b>won</b> the lottery!</p>
+                    </body>
+                  </html>"}]
+----
+
+You'll notice the first "part" in the preceding body was not, in fact, a
+part map, but the keyword +:alternative+. Messages are normally sent
+in "mixed" mode, indicating to an email client that each part constitutes a
+piece of the whole message. Messages of the +:alternative+ type,
+however, inform a client that each part represents the entire message,
+albeit in differing formats.
+
+[NOTE]
+====
+If you need to send complicated multipart messages and require a high
+level of control over message creation, you should use the raw
+JavaMail API to construct messages.
+====
+
+For attachments, the +:type+ parameter behaves a little differently,
+controlling whether the attachment resides inline (+:inline+) or as an
+attachment (+:attachment+). The contents of an attachment are
+specified by providing a +File+ object for the +:content+ key. An
+attachment's content type and name are generally inferred from the
++File+ object, but they may be overridden via the +:content-type+ and
++:file-name+ keys, respectively.(((attachments)))
+
+For example, forwarding all of your closest friends a picture of your
+cat might look something like this:
+
+[source,clojure]
+----
+:body [{:type "text/plain"
+        :content "Hey folks,\n\nCheck out these pictures of my cat!"}
+       {:type :inline
+        :content (File. "/tmp/lester-flying-photoshop")
+        :content-type "image/jpeg"
+        :file-name "lester-flying.jpeg"}
+       {:type :attachment
+        :content (File. "/tmp/lester-upside-down.jpeg")}]
+----
+
+==== See Also
+
+* ++postal++'s https://github.com/drewr/postal[GitHub repository]
+* JavaMail's http://bit.ly/javamail-api-doc[API documentation]
+

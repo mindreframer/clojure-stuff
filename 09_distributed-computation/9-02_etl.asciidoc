@@ -1,0 +1,251 @@
+[[sec_cascalog_etl]]
+=== Processing Data with an Extract Transform Load (ETL) Pipeline
+[role="byline"]
+by Alex Robbins
+
+==== Problem
+
+You need to change the format of large amounts of data from JSON lists
+to CSV for later processing.(((distributed computation, ETL data processing)))((("JSON (JavaScript Object Notation) data")))((("CSV (comma-separated values)"))) For example, you want to turn this input:
+
+[source,json]
+----
+{"name": "Clojure Programming", "authors": ["Chas Emerick",
+                                            "Brian Carper",
+                                            "Christophe Grand"]}
+{"name": "The Joy of Clojure", "authors": ["Michael Fogus", "Chris Houser"]}
+----
+
+into this output:
+
+----
+Chas Emerick,Brian Carper,Christophe Grand
+Michael Fogus,Chris Houser
+----
+
+==== Solution
+
+Cascalog allows you to write distributed processing jobs that can run
+locally for small jobs or on a Hadoop cluster for larger jobs.((("ETL (Extract Transform Load) pipeline")))(((Cascalog, ETL pipeline processing with)))((("distributed computation", "Cascalog", id="ix_DCcasc", range="startofrange")))
+
+To follow along with this recipe, create a new Leiningen project:
+
+[source,shell-session]
+----
+$ lein new cookbook
+----
+
+Modify your new project's _project.clj_ file by adding the +cascalog+
+dependency, setting up the +:dev+ profile, and enabling
+AOT compilation for the +cookbook.etl+ namespace. Your _project.clj_
+file should now look like this:
+
+[source,clojure]
+----
+(defproject cookbook "0.1.0-SNAPSHOT"
+  :description "FIXME: write description"
+  :url "http://example.com/FIXME"
+  :license {:name "Eclipse Public License"
+            :url "http://www.eclipse.org/legal/epl-v10.html"}
+  :dependencies [[org.clojure/clojure "1.5.1"]
+                 [cascalog "1.10.2"]
+                 [org.clojure/data.json "0.2.2"]]
+  :profiles {:dev {:dependencies [[org.apache.hadoop/hadoop-core "1.1.2"]]}}
+  :aot [cookbook.etl])
+----
+
+Create the file _src/cookbook/etl.clj_ and add a query to it:
+
+[source,clojure]
+----
+(ns cookbook.etl
+  (:require [cascalog.api :refer :all]
+            [clojure.data.json :as json]))
+
+(defn get-vec
+  "Wrap the result in a vector for Cascalog to consume."
+  [m k]
+  (vector
+   (get m k)))
+
+(defn vec->csv
+  "Turn a vector into a CSV string. (Not production quality)."
+  [v]
+  (apply str (interpose "," v)))
+
+(defmain Main [in out & args]
+  (?<-
+    (hfs-textline out :sinkmode :replace)
+    [?out-csv]
+    ((hfs-textline in) ?in-json)
+    (json/read-str ?in-json :> ?book-map)
+    (get-vec ?book-map "authors" :> ?authors)
+    (vec->csv ?authors :> ?out-csv)))
+----
+
+Create a file with input data in _samples/books/books.json_:
+
+[source,json]
+----
+{"name": "Clojure Cookbook", "authors": ["Ryan", "Luke"]}
+----
+
+[NOTE]
+====
+The full contents of this solution are available on GitHub in the
+http://bit.ly/cc-cascalog-samples[Cascalog samples]
+repository.
+
+To retrieve a copy of the working project, clone the project from
+GitHub and check out the +etl-sample+ branch:
+
+[source,shell-session]
+----
+$ git clone https://github.com/clojure-cookbook/cascalog-samples.git
+$ cd cascalog-samples
+$ git checkout etl-sample
+----
+====
+
+You can now execute the job locally with *+lein run+*, providing an
+input and output file:
+
+[source,shell-session]
+----
+$ lein run -m cookbook.etl.Main samples/books/books.json samples/books/output
+
+# Or, on a Hadoop cluster
+$ lein uberjar
+$ hadoop jar target/cookbook-standalone.jar cookbook.etl.Main \
+  books.json books.csv
+----
+
+The results in _samples/books/output/part-00000_ are as follows:
+
+----
+Ryan,Luke
+----
+
+==== Discussion
+
+While it would be easy to write a script that converted JSON to CSV,
+it would be a lot of work to convert the script to run across many
+computers. Writing the transform script using Cascalog allows it to
+run in local mode or distributed mode with almost no modification.
+
+There are a lot of new concepts and syntax in the preceding small example,
+so let's break it down piece by piece.
+
+In this recipe, the data flows through the functions roughly in order.
+The first line uses the +defmain+ macro (from Cascalog)
+to define a class with a +-main+ function that lets you run the query
+over Hadoop. In this case, the class with a +-main+ function is called
++Main+, but that is not required. +defmain+ allows you to create
+several Hadoop-enabled queries in the same file:
+
+[source,clojure]
+----
+(defmain Main [in out & args]
+----
+
+Inside the +Main+ function is a Cascalog operator, pass:[<literal>?&#x003C;-</literal>],footnote:[While queries _look_ like regular Clojure, they are in fact a DSL. If you're not familiar with Cascalog queries, learn more in Nathan Marz's http://bit.ly/cascalog-intro-post["Introducing Cascalog" article].] that defines and executes a query:
+
+[source,clojure]
+----
+(?<-
+----
+
+This operator takes an output location (called a "tap" in Cascalog), a result vector,
+and a series of logic predicates. The next line is the destination, the place the output will be written to. The same functions are used to create input and output taps:
+
+[source,clojure]
+----
+(hfs-textline out :sinkmode :replace)
+----
+
+This example uses
++hfs-textline+, but many other taps exist. You can even write your
+own.
+
+[TIP]
+====
+Use +:sinkmode :replace+ in your output tap, and Cascalog will replace
+any existing output. This helps while you are rerunning the query to
+debug it. Otherwise, you will have to remove the output file every time
+you want to rerun.
+====
+
+This is a list of all the logic variables that should be returned from
+this query:
+
+[source,clojure]
+----
+[?out-csv]
+----
+
+In this case, these are the logic variables that will be
+dumped into the output location. Cascalog knows these are special
+logic variables because their names begin with a +?+ or a +!+.
+
+[WARNING]
+====
+When thinking about logic variables, it helps to think of them as
+containing all possible valid values. As you add predicates, you either
+introduce new logic variables that are (hopefully) linked to existing
+variables, or you add constraints to existing logic variables.
+====
+
+The next line defines the input tap. The JSON data structures will be read
+in one line at a time from the location specified by +in+. Each line
+will be stored into the +?in-json+ logic var, which will flow through
+the rest of the logic predicates:
+
+[source,clojure]
+----
+((hfs-textline in) ?in-json)
+----
+
++read-str+ parses the JSON string found in +?in-json+ into a hash map,
+which is stored into +?book-map+:
+
+[source,clojure]
+----
+(json/read-str ?in-json ?book-map)
+----
+
+Now you pull the authors out of the map and store the vector into its
+own logic variable. Cascalog assumes vector output means binding
+multiple logic vars. To outsmart Cascalog, wrap the output in an extra
+vector for Cascalog to consume:
+
+[source,clojure]
+----
+(get-vec ?book-map "authors" ?authors)
+----
+
+Finally, you convert the vector of authors into valid CSV using the
++vec\->csv+ function. Since this line produces values for the
++?out-csv+ logic variable, which is named in the output line earlier,
+the query will produce the output:
+
+[source,clojure]
+----
+(vec->csv ?authors ?out-csv)))
+----
+
+Cascalog is a great tool for building an extract transform load (ETL)
+pipeline. It allows you to spend more time thinking about your data
+and less time thinking about the mechanics of reading files,
+distributing work, or managing dependencies. When writing your own ETL
+pipelines, it might help to follow this process:
+
+. Finalize the input format(s).
+. Finalize the output format(s).
+. Start working from the input format, keeping track of the current
+  format for each step.
+
+==== See Also
+
+* Ian Rumford's blog post http://bit.ly/cascalog-etl-post["Using Cascalog for Extract Transform and Load"]
+* https://github.com/clojure/core.logic[+core.logic+], a logic
+  programming library for Clojure

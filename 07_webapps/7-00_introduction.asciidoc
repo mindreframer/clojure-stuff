@@ -1,0 +1,19 @@
+=== Introduction
+
+Web application development is the breadwinner for many languages
+nowadays; Clojure is no exception. In the annual
+http://bit.ly/clojure-survey-2013[2013
+State of Clojure Survey], web development ranked first for the
+question, "In which domains are you applying Clojure and/or
+ClojureScript?"
+
+Much of the Clojure web development community today centers around
+https://github.com/ring-clojure/ring[Ring], an HTTP server library very
+much akin to Ruby's http://rack.github.io/[Rack]. Starting with the
+introduction to Ring in <<sec_webapps_ring_introduction>>, you'll find
+a full complement of recipes here that will get you up to speed in no time.
+
+Following Ring, the chapter takes a tour of the other Clojure web
+development ecosystems available at the time of writing, covering a few
+templating and HTML-manipulation libraries and a number of alternative
+web frameworks.

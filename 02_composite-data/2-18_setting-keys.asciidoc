@@ -1,0 +1,188 @@
+[[sec_composite_data_maps_setting_keys]]
+=== Setting Keys in a Map
+[role="byline"]
+by Luke VanderHart
+
+==== Problem
+
+You want to "change" a map by adding, setting, or removing keys.(((maps, setting keys in)))(((keys, setting in maps)))
+
+==== Solution
+
+The most basic way to change a map is using the +assoc+ function.(((functions, assoc)))
+Given a map and any number of additional key/value pairs as arguments,
+it will return an updated map containing the respective keys and
+values:
+
+[source,clojure]
+----
+(def villain {:honorific "Dr." :name "Mayhem"})
+(assoc villain :occupation "Mad Scientist" :status :at-large)
+;; -> {:honorific "Dr.", :name "Mayhem",
+;;     :occupation "Mad Scientist", :status :at-large}
+----
+
+If used on a map that already contains a key, the +assoc+ function
+will return an updated map with the newly specified value for the key:
+
+[source,clojure]
+----
+(def villain {:honorific "Dr.", :name "Mayhem",
+              :occupation "Mad Scientist", :status :at-large})
+(assoc villain :status :deceased)
+;; -> {:honorific "Dr.", :name "Mayhem",
+;;     :occupation "Mad Scientist", :status :deceased}
+----
+
+To remove keys, use the +dissoc+ function. Given a map and any(((keys, removing from maps)))(((functions, dissoc)))
+number of keys, it returns a map minus those keys:
+
+[source,clojure]
+----
+(def villain {:honorific "Dr.", :name "Mayhem",
+              :occupation "Mad Scientist", :status :deceased})
+(dissoc villain :occupation :honorific)
+;; -> {:name "Mayhem", :status :deceased}
+----
+
+==== Discussion
+
+It's fairly common to have maps contained in other maps. If it is(((nested maps)))
+necessary to update a deeply nested value, nested calls to +assoc+
+quickly become inconvenient, especially since they need to be
+"inside-out." Consider the following data structure:
+
+[source,clojure]
+----
+(def book {:title "Clojure Cookbook"
+           :author {:name "Ryan Neufeld"
+                    :residence {:country "USA"}}})
+----
+
+If Ryan were to move back to his native land of Canada, fully updating
+the map representing this book using only +assoc+ would look something
+like the following:
+
+[source,clojure]
+----
+(assoc book :author
+  (assoc (:author book) :residence
+    (assoc (:residence (:author book)) :country "Canada")))
+----
+
+Obviously, this is inconvenient and difficult to read.
+
+The +assoc-in+ function removes this inconvenience, allowing you to(((keys, specifying key paths)))
+specify a _key path_ instead of a sole key. Instead of changing a
+value one key deep, a _key path_ lists a sequence of keys, applied
+recursively to change a deeply nested value:
+
+[source,clojure]
+----
+(assoc-in book
+          [:author :residence :country]
+          "Canada")
+;; -> {:author {:name "Ryan Neufeld"
+;;              :residence {:country "Canada"}}
+;;              :title "Clojure Cookbook"}
+----
+
+The preceding sample first looks up the map associated with the
++:residence+ key in the nested data structure, then associates
++"Canada"+ with the +:country+ key. Finally, the entire data structure
+is returned.
+
+What if you needed to _update_ a value based on its previous value,
+instead of just changing it?(((functions, update-in)))(((values, updating)))(((maps, updating keys in)))
+
+Fortunately, Clojure provides +update-in+ expressly for this purpose.
+Instead of taking a new value, +update-in+ takes an _update function_.
+This function is invoked with the value retrieved at _key path_ and
+any trailing arguments passed to +update-in+. It's a peculiar
+function to wrap your head around at first. Perhaps it is best to
+illustrate with an example:
+
+[source,clojure]
+----
+(def website {:clojure-cookbook {:hits 1236}})
+
+;; Register 101 new hits to the Cookbook website
+(update-in website                   ; <1>
+           [:clojure-cookbook :hits] ; <2>
+           +                         ; <3>
+           101)                      ; <4>
+;; -> {:clojure-cookbook {:hits 1337}}
+----
+
+<1> The map
+<2> The key path
+<3> The update function, `+`
+<4> Additional arguments to `+`
+
++update-in+ will also actually create maps for any of the keys in the
+vector that don't exist. This means it can be used to create structure
+as well as to update values:
+
+[source,clojure]
+----
+(update-in {} [:author :residence] assoc :country "USA")
+;; -> {:author {:residence {:country "USA"}}}
+----
+
+Even though the starting map is empty, two empty maps are created for
+the values of the +:author+ and +:residence+ keys, meaning the +assoc+
+will be applied to a new, empty map.
+
+++++
+<?hard-pagebreak?>
+++++
+
+.Treating Clojure's State Constructs Like Maps
+****
+One other common use case for maps is as the values of one of
+Clojure's state constructs: _atoms_, _refs_, or _agents_. Clojure maps
+themselves are immutable values. In a very literal sense, if you "add"
+a key to a map, it is no longer the same value any more. But
+sometimes, it is necessary to preserve a logical _identity_ for
+different values across time. That's when to use one of the state
+management tools.(((Clojure, state management tools in)))(((state management tools)))
+
+To update the value of a piece of state (ref, atom, or agent), you
+invoke its specific state transition function (+alter+, +swap!+, or
++send+, respectively). State transition functions share a common form:
+they take the reference as the first argument, the function to apply
+to the value as the second argument, and any arguments to the function
+as additional arguments.
+
+So, for example, to deeply update an item contained in a map
+referenced by an atom, you can invoke the +swap!+ function (the state
+transition function for atoms), passing it your atom and the
++update-in+ function, along with the list of keys and the function to
+use to update the value:
+
+[source,clojure]
+----
+(def retail-data (atom {:customers [{:id 123 :name "Luke"}
+                                    {:id 321 :name "Ryan"}]
+                        :orders [{:sku "Q2M9" :customer 123 :qty 4}
+                                 {:sku "43XP" :customer 321 :qty 1}]}))
+
+(swap! retail-data update-in [:orders] conj
+       {:sku "9QED" :customer 321 :qty 2})
+----
+
+This will add a new order map to the list of orders contained in the
+map contained in the +retail-data+ atom.
+
+Although such triple combos are not terribly common, they illustrate
+the general consistency of functions that take other functions and
+arguments, and how they can be combined arbitrarily deeply. In this
+case, what starts with a single call to +swap!+ ends up also updating
+a map and conjoining to a vector in the same form.
+****
+
+==== See Also
+
+* <<sec_composite_maps_as_seqs>>
+* <<sec_composite_data_maps_multiple_values>>
+* <<sec_composite_combining_maps>>

@@ -1,0 +1,116 @@
+[[sec_webapps_compojure_compojure]]
+=== Routing Requests with Compojure
+[role="byline"]
+by Adam Bard
+
+==== Problem
+
+You want an easy way to route URLs to specific Ring handler functions.(((Ring library, request routing with Compojure)))(((Compojure library)))(((handlers)))(((request routing)))
+
+==== Solution
+
+Use the https://github.com/weavejester/compojure[Compojure library] to add routing to your app.
+
+To follow along with this recipe, clone the https://github.com/clojure-cookbook/ringtest repository and overwrite _src/ringtest.clj_:
+
+[source, clojure]
+----
+(ns ringtest
+  (:require
+    [compojure.core :refer [defroutes GET]]
+    [ring.adapter.jetty :as jetty]))
+
+;; View functions
+(defn view [x]
+  (str "<h1>" x "</h1>"))
+
+(defn index []
+  (view "Hello"))
+
+(defn index-fr []
+  (view "Bonjour"))
+
+;; Routing
+(defroutes main-routes
+  (GET "/" [] (index))
+  (GET "/en/" [] (index))
+  (GET "/fr/" [] (index-fr))
+  (GET "/:greeting/" [greeting] (view greeting)))
+
+;; Server
+(defn -main []
+ (jetty/run-jetty main-routes {:port 3000}))
+----
+
+==== Discussion
+
+Compojure is a routing library that lets you define routes for your app.
+It does this via the `defroutes` macro, which produces a Ring handler function.
+
+Here, we define four routes:
+
+`/`::
+Displays "Hello"
+
+`/en/`::
+Also displays "Hello"
+
+`/fr/`::
+Displays "Bonjour"
+
+`/:greeting/`::
+Echoes the greeting passed by the user
+
+The last view is an example of Compojure's URL parameter syntax. The section
+of the URL identified by `:greeting` is passed along to the view, which displays
+it for the user. So, visiting _http://localhost:3000/Buenos%20Dias/_ displays
+"Buenos Dias" in response.
+
+One caveat to be aware of is that Compojure routes are sensitive to a
+trailing slash: a route defined as `/users/:user/blog/` will not match
+the URL _http://mysite.com/users/fred/blog_, but it _will_ match
+_http://mysite.com/users/fred/blog/_.
+
+The `[]` in each route is actually syntactic sugar for intercepting these
+parameters. You can also use `req` or any other symbol to get the whole request:
+
+[source, clojure]
+----
+(defroutes main-routes-2
+  (GET "/" req (some-view req)))
+----
+
+You can even use Clojure's destructuring syntaxfootnote:[If you're
+not familiar with Clojure's destructuring syntax, we suggest reading Jay
+Fields's
+http://bit.ly/destructuring["Clojure:
+Destructuring" blog post]. For a more extensive resource, pick up a
+copy of http://www.clojurebook.com/[_Clojure Programming_] (O'Reilly) by Chas Emerick, Brian Carper, and Christophe Grand, which covers
+destructuring in depth.] to extract parts of the request. For example,
+if you're using the `wrap-params` middleware, you can grab the parameters
+and pass them to a function:
+
+[source, clojure]
+----
+(defroutes main-routes-2
+  (GET "/" {params :params} (some-other-view params)))
+----
+
+It is important to realize that Compojure works on top of Ring. Your views
+should still return Ring response maps (although Compojure will wrap strings
+you return with a basic 200 response).
+
+You can also define routes for other types of HTTP requests by
+specifying the route using the relevant Compojure directive:
+`compojure.core/POST` and `compojure.core/PUT` are most commonly used,
+in addition to `compojure.core/GET`.
+
+Compojure provides a few other helpful tools, such as
+http://bit.ly/compojure-route[`compojure.route`],
+which provides helpers for serving resources, files, and 404 responses; and
+http://bit.ly/compojure-handler[`compojure.handler`],
+which bundles a number of Ring middlewares into one convenient wrapper.
+
+==== See Also
+
+* The http://compojure.org[Compojure website]

@@ -1,0 +1,81 @@
+=== Handling Form Data with Ring
+[role="byline"]
+by Adam Bard
+
+==== Problem
+
+You want your app to accept user input using an HTML form.(((Ring library, handling form data with)))(((form data)))(((data, form data)))
+
+==== Solution
+
+Use `ring.middleware.params/wrap-params` to add incoming HTTP form parameters to incoming request maps.
+
+To follow along with this recipe, clone the https://github.com/clojure-cookbook/ringtest repository and overwrite _src/ringtest.clj_:
+
+[source, clojure]
+----
+(ns ringtest
+  (:require
+    [ring.adapter.jetty :as jetty]
+    [ring.middleware.params :refer [wrap-params]]))
+
+(def greeting-form
+  (str
+    "<html>"
+    "  <form action='' method='post'>"
+    "    Enter your name: <input type='text' name='name'><br/>"
+    "    <input type='submit' value='Say Hello'>"
+    "  </form>"
+    "</html>"))
+
+(defn show-form []
+  {:body greeting-form
+   :status 200 })
+
+(defn show-name
+  "A response showing that we know the user's name"
+  [name]
+  {:body (str "Hello, " name)
+   :status 200})
+
+(defn handler
+  "Show a form requesting the user's name, or greet them if they
+  submitted the form"
+  [req]
+  (let [name (get-in req [:form-params "name"])]
+    (if name
+      (show-name name)
+      (show-form))))
+
+(defn -main []
+  ;; Run the server on port 3000
+  (jetty/run-jetty (wrap-params handler) {:port 3000}))
+----
+
+==== Discussion
+
+`wrap-params` is a Ring middleware that handles the retrieval of query string
+and form parameters from raw requests. It adds three keys to the request:
+
+`:query-params`::
+Contains a map of the parsed query string parameters
+
+`:form-params`::
+Contains a map of form body parameters
+
+`:params`::
+Contains the contents of both `:query-params` and `:form-params` merged together
+
+In the preceding example we used `:form-params`, so our handler will
+only respond with a greeting on POST requests containing form-encoded
+parameters. If we had used `:params`, we would have had the option of
+also passing a URL query string with a `"name"` parameter. `:params`
+works with any kind of parameter (form- or URL-encoded). `:form-params`
+only works for form parameters.
+
+Note that the form keys are passed in as strings, not keywords.
+
+==== See Also
+
+* <<sec_ring_middleware>>
+* Ring's http://bit.ly/ring-parameters[parameters documentation]

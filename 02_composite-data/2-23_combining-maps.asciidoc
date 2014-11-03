@@ -1,0 +1,108 @@
+[[sec_composite_combining_maps]]
+=== Combining Maps
+[role="byline"]
+by Tom Hicks
+
+==== Problem
+
+You have two or more maps you wish to combine to produce a single map.(((maps, combining)))(((functions, merge)))(((functions, merge-with)))
+
+==== Solution
+
+Use +merge+ to combine two or more maps with no keys in common:
+
+[source,clojure]
+----
+(def arizona-bird-counts {:cactus-wren 8})
+(def florida-bird-counts {:gull 20 :pelican 14})
+
+(merge florida-bird-counts arizona-bird-counts)
+;; -> {:pelican 14, :cactus-wren 8, :gull 20}
+----
+
+Use +merge-with+ when you want more explicit control of the merge
+strategy for keys that exist in more than one map:
+
+[source,clojure]
+----
+(def florida-bird-counts    {:gull 20 :pelican 1 :egret 4})
+(def california-bird-counts {:gull 12 :pelican 4 :jay 3})
+
+;; Merge values with + to get their totals
+(merge-with + california-bird-counts florida-bird-counts)
+;; -> {:pelican 5, :egret 4, :gull 32, :jay 3}
+----
+
+==== Discussion
+
+In both +merge+ and +merge-with+, maps are combined from left to
+right, returning a new immutable map as a result. This functions much
+like a "left fold." +merge+ is the simpler function of the pair,
+always returning the last value it sees for every key.
+
+When mappings for the same key exist in more than one map, the latter
+mapping is used in the result. This can be useful, for example, when
+you receive new totals throughout the day, but only for values that
+have changed:
+
+[source,clojure]
+----
+;; Favorite ice cream flavor votes throughout the day
+(def votes-am {:vanilla 3 :chocolate 5})
+(def votes-pm {:vanilla 4 :neapoliton 2})
+(merge votes-am votes-pm)
+;; -> {:vanilla 4, :chocolate 5, :neapoliton 2}
+----
+
++merge-with+ facilitates powerful recipes for map combination by
+allowing you to control _how_ values are merged. You can imagine
++merge-with+ as +reduce+ for maps with common keys. The first argument
+to +merge-with+ is a merge function that will be invoked for each pair
+of duplicated values.
+
+With careful choice of map value types, +merge-with+ provides some
+concise solutions to common problems. For example, by merging with
++clojure.set/intersection+, you can find the intersection of "like" and
+"dislike" sets in a team of programmers:
+
+[source,clojure]
+----
+(def Alice {:loves #{:clojure :lisp :scheme} :hates #{:fortran :c :c++}})
+(def Bob   {:loves #{:clojure :scheme}       :hates #{:c :c++ :algol}})
+(def Ted   {:loves #{:clojure :lisp :scheme} :hates #{:algol :basic :c
+                                                      :c++ :fortran}})
+
+(merge-with clojure.set/intersection Alice Bob Ted)
+;; -> {:loves #{:scheme :clojure}, :hates #{:c :c++}}
+----
+
+It is also possible to merge nested maps by creating a recursive merge
+function.
+
+[source,clojure]
+----
+;; Copied verbatim from the defunct clojure-contrib (http://bit.ly/deep-merge-with)
+(defn deep-merge-with [f & maps]
+  (apply
+    (fn m [& maps]
+      (if (every? map? maps)
+        (apply merge-with m maps)
+        (apply f maps)))
+    maps))
+
+(deep-merge-with + {:foo {:bar {:baz 1}}}
+                   {:foo {:bar {:baz 6 :qux 42}}})
+;; -> {:foo {:bar {:qux 42, :baz 7}}}
+----
+
+As you saw in the previous examples, +merge-with+ is a versatile tool: we
+used `+` to add values of the same key, +clojure.set/intersection+ to
+find shared values of multiple sets, and a recursive function
++deep-merge+ to recursively merge nested maps. +merge-with+ is a
+very powerful function, indeed.(((range="endofrange", startref="ix_CDmap")))
+
+
+==== See Also
+
+* <<sec_composite_data_maps_setting_keys>>
+* <<sec_composite_data_maps_multiple_values>>

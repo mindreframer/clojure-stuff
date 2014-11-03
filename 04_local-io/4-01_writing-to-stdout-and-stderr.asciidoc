@@ -1,0 +1,80 @@
+[[sec_local_io_writing_to_stdout_and_stderr]]
+=== Writing to STDOUT and STDERR
+[role="byline"]
+by Alan Busby
+
+==== Problem
+
+You want to write to +STDOUT+ and +STDERR+.((("I/O (input/output) streams", "STDOUT/STDERR")))((("STDOUT/STDERR")))
+
+==== Solution
+
+By default, the +print+ and +println+ functions will print content(((functions, print)))(((functions, println)))
+passed to them to +STDOUT+:
+
+[source,clojure]
+----
+(println "This text will be printed to STDOUT.")
+;; *out*
+;; This text will be printed to STDOUT.
+
+(do 
+  (print "a")
+  (print "b"))
+;; *out*
+;; ab
+----
+
+Change the binding of `*out*` to `*err*` to print to +STDERR+ instead
+of +STDOUT+:
+
+[source,clojure]
+----
+(binding [*out* *err*]
+  (println "Blew up!"))
+;; *err*
+;; Blew up!\n
+----
+
+==== Discussion
+
+In Clojure, the dynamic binding vars `*out*` and `*err*` are bound to your
+application environment's built-in +STDOUT+ and +STDERR+ streams,
+respectively.
+
+All of the printing functions in Clojure, such as +print+ and +println+,
+utilize the `*out*` binding as the destination to write to.
+Consequently, you can rebind that var to `*err*` (using +binding+) to
+change the destination of print messages from +STDOUT+ to +STDERR+.
+Other printing functions include +pr+, +prn+, +printf+, and a handful
+of others.((("printing functions, print/prntln")))
+
+The bound value of `*out*` is not restricted to operating system
+streams; `*out*` can be _any_ stream-like object. This makes print
+functions powerful tools. They can be used to write to files, sockets,
+or any other pipes you desire. The built-in function((("Clojure", "clojure.java.io/writer")))
++clojure.java.io/writer+ is a versatile constructor for output streams:
+
+[source,clojure]
+----
+;; Create a writer to file foo.txt and print to it.
+(def foo-file (clojure.java.io/writer "foo.txt"))
+(binding [*out* foo-file]
+  (println "Foo, bar."))
+
+;; Nothing is printed to *out*.
+
+;; And of course, close the file.
+(.close foo-file)
+----
+
+==== See Also
+
+* ++pr++'s
+  http://bit.ly/clojure-pr[documentation]
+  and
+  http://bit.ly/clojure-pr-source[source]
+  to get a better idea of how `*out*`-based printing works
+* ++clojure.java.io/writer++'s
+  http://bit.ly/java-io-writer[documentation]
+  for more information on creating writers

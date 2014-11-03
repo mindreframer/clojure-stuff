@@ -1,0 +1,92 @@
+[[sec_primitives_converting_characters_integers]]
+=== Converting Between Characters and Integers
+[role="byline"]
+by Ryan Neufeld
+
+==== Problem
+
+You need to convert characters to their respective Unicode code points
+(as integer values), or vice versa.(((strings, Unicode in)))((("Unicode characters, conversion of")))(((characters, Unicode conversion)))
+(((integers, character conversion)))(((functions, int)))(((functions, char)))
+
+==== Solution
+
+Use the +int+ function to convert a character to its integer value:
+
+[source,clojure]
+----
+(int \a)
+;; -> 97
+
+(int \ø)
+;; -> 248
+
+(int \α) ; Greek letter alpha
+;; -> 945
+
+(int \u03B1) ; Greek letter alpha (by code point)
+;; -> 945
+
+(map int "Hello, world!")
+;; -> (72 101 108 108 111 44 32 119 111 114 108 100 33)
+----
+
+Use the +char+ function to return a character corresponding to the
+code point specified by the integer:
+
+[source,clojure]
+----
+(char 97)
+;; -> \a
+
+(char 125)
+;; -> \}
+
+(char 945)
+;; -> \α
+
+
+(def codes [115 101 99 114 101 116 32 109 101 115 115 97 103 101 115])
+;; -> #'user/codes
+(apply str (map char codes))
+;; -> "secret messages"
+----
+
+==== Discussion
+
+Clojure inherits the JVM's robust Unicode support. All strings are
+UTF-16 strings, and all characters are Unicode
+characters. Conveniently, the first 256 Unicode code points are
+identical to ASCII, which makes standard ASCII text easy to work
+with. However, Clojure (like Java) does not actually privilege ASCII in
+any way; the 1:1 correspondence between characters and integers
+indicating code points continues all the way up through the Unicode space.((("ASCII, integer to character correspondence")))
+
+For example, the expression +(map char (range 0x0410 0x042F))+ prints
+out all the Cyrillic capital letters, which happen to lie on that
+range on the Unicode spectrum:
+
+[source,clojure]
+----
+(\А \Б \В \Г \Д \Е \Ж \З \И \Й \К \Л \М \Н \О \П \Р \С \Т \У \Ф
+\Х \Ц \Ч \Ш \Щ \Ъ \Ы \Ь \Э \Ю)
+----
+
+The +char+ and +int+ functions are useful primarily for coercing a
+number into an instance of either +java.lang.Integer+ or
++java.lang.Character+. Both ++Integer++s and ++Character++s are,
+ultimately, encoded as numbers, although ++Character++s support
+additional text-related methods and cannot be used in mathematic
+expressions without first being converted to a true numeric type.(((Java, java.lang.Integer)))(((Java, java.lang.Character)))
+
+==== See Also
+
+* http://oreil.ly/unicode-explained[_Unicode Explained_], by Jukka K. Korpela (O'Reilly), for truly comprehensive coverage of how Unicode and internationalization works
+
+* <<sec_primitives_strings_seq_of_chars>>, for details on working with the characters that constitute a string
+
+* <<sec_primitives_numbers_parsing_numbers>>
+
+++++
+<?hard-pagebreak?>
+++++
