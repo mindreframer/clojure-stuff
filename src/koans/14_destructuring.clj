@@ -1,3 +1,6 @@
+(ns koans.14-destructuring
+  (:require [koan-engine.core :refer :all]))
+
 (def test-address
   {:street-address "123 Test Lane"
    :city "Testerville"
@@ -22,8 +25,8 @@
        __))
 
   "You can regain the full argument if you like arguing"
-  (= {:original-parts ["Steven" "Hawking"] :named-parts {:first "Steven" :last "Hawking"}}
-     (let [[first-name last-name :as full-name] ["Steven" "Hawking"]]
+  (= {:original-parts ["Stephen" "Hawking"] :named-parts {:first "Stephen" :last "Hawking"}}
+     (let [[first-name last-name :as full-name] ["Stephen" "Hawking"]]
        __))
 
   "Break up maps by key"
