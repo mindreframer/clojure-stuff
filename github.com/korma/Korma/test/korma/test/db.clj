@@ -1,8 +1,15 @@
 (ns korma.test.db
-  (:use [clojure.test :only [deftest is testing]]
+  (:use [clojure.test :only [deftest is testing use-fixtures]]
+        [korma.core :only [exec-raw]]
         [korma.db :only [connection-pool defdb get-connection h2
-                         msaccess mssql mysql odbc oracle postgres sqlite3]]))
+                         msaccess mssql mysql odbc oracle postgres sqlite3 vertica firebird default-connection transaction]]))
 
+(defdb mem-db (h2 {:db "mem:test"}))
+
+(use-fixtures :once
+  (fn [f]
+    (default-connection mem-db)
+    (f)))
 
 (def db-config-with-defaults
   {:classname "org.h2.Driver"
@@ -17,6 +24,7 @@
    :subname "mem:db_connectivity_test_db"
    :excess-timeout 99
    :idle-timeout 88
+   :initial-pool-size 10
    :minimum-pool-size 5
    :maximum-pool-size 20
    :test-connection-on-checkout true
@@ -41,6 +49,7 @@
         datasource (:datasource pool)]
     (is (= 99 (.getMaxIdleTimeExcessConnections datasource)))
     (is (= 88 (.getMaxIdleTime datasource)))
+    (is (= 10 (.getInitialPoolSize datasource)))
     (is (= 5 (.getMinPoolSize datasource)))
     (is (= 20 (.getMaxPoolSize datasource)))
     (is (= (:test-connection-query db-config-with-options-set) (.getPreferredTestQuery datasource)))
@@ -52,6 +61,28 @@
 
 
 ;;; DB spec creation fns
+
+(deftest test-firebird
+  (testing "firebirdsql - defaults"
+    (is (= {:classname "org.firebirdsql.jdbc.FBDriver"
+            :subprotocol "firebirdsql"
+            :subname "localhost/3050:?encoding=UTF8"
+            :make-pool? true}
+           (firebird {}))))
+  (testing "firebirdsql - options selected"
+    (is (= {:db "db"
+            :port "port"
+            :host "host"
+            :classname "org.firebirdsql.jdbc.FBDriver"
+            :subprotocol "firebirdsql"
+            :encoding "NONE"
+            :subname "host/port:db?encoding=NONE"
+            :make-pool? false}
+           (firebird {:host "host"
+                      :port "port"
+                      :db "db"
+                      :encoding "NONE"
+                      :make-pool? false})))))
 
 (deftest test-postgres
   (testing "postgres - defaults"
@@ -112,6 +143,28 @@
                    :port "port"
                    :db "db"
                    :make-pool? false})))))
+
+(deftest test-vertica
+  (testing "vertica - defaults"
+    (is (= {:classname "com.vertica.jdbc.Driver"
+            :subprotocol "vertica"
+            :subname "//localhost:5433/"
+            :delimiters "\""
+            :make-pool? true}
+           (vertica {}))))
+  (testing "vertica - options selected"
+    (is (= {:db "db"
+            :port "port"
+            :host "host"
+            :classname "com.vertica.jdbc.Driver"
+            :subprotocol "vertica"
+            :subname "//host:port/db"
+            :delimiters "\""
+            :make-pool? false}
+           (vertica {:host "host"
+                     :port "port"
+                     :db "db"
+                     :make-pool? false})))))
 
 (deftest test-mssql
   (testing "mssql - defaults"
@@ -204,3 +257,9 @@
             :subname "db"
             :make-pool? false}
            (h2 {:db "db" :make-pool? false})))))
+
+(deftest transaction-options
+  (testing "if transaction macro respects isolation levels"
+    (is (not= (transaction {:isolation :repeatable-read} (exec-raw "CALL LOCK_MODE()" :results))
+              (transaction {:isolation :read-committed} (exec-raw "CALL LOCK_MODE()" :results))))
+    (is (thrown? Exception (transaction {:isolation :no-such-isolation} (exec-raw "CALL LOCK_MODE()" :results))))))
