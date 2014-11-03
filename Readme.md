@@ -80,6 +80,10 @@
       Prismatic's Clojure utility belt
        157 commits, last change: , 806 stars, 57 forks
 
+    ptaoussanis/sente:
+      Clojure(Script) + core.async + WebSockets/Ajax
+       172 commits, last change: 2014-10-12 - 11:25, 464 stars, 24 forks
+
     puppetlabs/trapperkeeper:
       A services framework for Clojure / JVM applications.
        505 commits, last change: , 325 stars, 20 forks
@@ -87,6 +91,10 @@
     runexec/chp:
       ClojureHomePage is a Compojure based web framework that allows you to write the backend and frontend with Clojure.
        170 commits, last change: , 145 stars, 3 forks
+
+    sgrove/omchaya:
+      ClojureScript + Om client for Kandan (http://kandanapp.com/)
+       63 commits, last change: 2014-03-04 - 04:41, 166 stars, 10 forks
 
     swannodette/lt-cljs-tutorial:
       A ClojureScript Programming Language Tutorial for Light Table Users
