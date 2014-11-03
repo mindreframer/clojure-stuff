@@ -6,10 +6,10 @@ https://github.com/korma/Korma.git
 https://github.com/krisajenkins/yesql.git
 https://github.com/Prismatic/eng-practices.git
 https://github.com/Prismatic/plumbing.git
+https://github.com/ptaoussanis/sente.git
 https://github.com/puppetlabs/trapperkeeper.git
 https://github.com/runexec/chp.git
+https://github.com/sgrove/omchaya.git
 https://github.com/swannodette/lt-cljs-tutorial.git
 https://github.com/tailrecursion/hoplon.git
 https://github.com/ztellman/aleph.git
-https://github.com/ptaoussanis/sente.git
-https://github.com/sgrove/omchaya.git
