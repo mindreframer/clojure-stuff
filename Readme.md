@@ -3,6 +3,7 @@
 
 ## Learning:
   - http://www.braveclojure.com/
+  - http://www.stuttaford.me/codex/
   - http://aphyr.com/tags/Clojure-from-the-ground-up
   - http://learn-clojure.com/clojure_training_classes.html
   - http://www.4clojure.com/problems
