@@ -8,6 +8,7 @@
   - http://learn-clojure.com/clojure_training_classes.html
   - http://www.4clojure.com/problems
   - http://adam.pohorecki.pl/blog/2013/10/18/more-ruby-than-ruby-talk-at-krug/
+  - http://tonsky.livejournal.com/tag/clojure%20at%20echo (Russian)
   - http://yogthos.github.io/ClojureDistilled.html
   - https://gustavus.edu/+max/concrete-abstractions-pdfs/index.html (Scheme)
 
