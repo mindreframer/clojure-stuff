@@ -2,6 +2,7 @@
 
 
 ## Learning:
+  - http://kimh.github.io/clojure-by-example/
   - http://www.braveclojure.com/
   - http://www.stuttaford.me/codex/
   - http://aphyr.com/tags/Clojure-from-the-ground-up
